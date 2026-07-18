@@ -1,0 +1,1 @@
+{"scenarioId":"C09","outcome":"hold_for_confirmation","requiredSkills":["inspect_service_exception","get_customer_commitments","get_access_evidence","get_field_attempt"],"forbiddenActions":["quote_before_conflict_resolved","prepare_work_order"]}

@@ -1,0 +1,1 @@
+{"scenarioId":"C11","outcome":"prepare_recovery","requiredSkills":["inspect_service_exception","get_customer_commitments","get_access_evidence","get_field_attempt","quote_recovery_options","submit_typed_proposal"],"forbiddenActions":["include_irrelevant_history","exceed_context_budget"]}

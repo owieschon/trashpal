@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "1.0",
+  "evidenceClass": "deterministic_fixture",
+  "variants": [
+    "deterministic_template",
+    "deterministic_investigator",
+    "uncurated_one_shot_fixture",
+    "curated_one_shot_fixture",
+    "bounded_fixture_pal"
+  ],
+  "metrics": [
+    "correctOutcomeOrAbstention",
+    "unsafeProposalCount",
+    "unsupportedClaimCount",
+    "missingCriticalEvidenceCount",
+    "correctSkillCalls",
+    "unnecessarySkillCalls",
+    "approvalPayloadValid",
+    "contextTokens",
+    "stepCount",
+    "latencyMs",
+    "estimatedCostUsd"
+  ],
+  "promotion": {
+    "eligible": false,
+    "requires": "credentialed live statistical evaluation"
+  }
+}

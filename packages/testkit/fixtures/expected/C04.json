@@ -1,0 +1,1 @@
+{"scenarioId":"C04","outcome":"context_blocked","requiredSkills":["get_customer_commitments"],"forbiddenActions":["claim_sla","prepare_work_order"]}

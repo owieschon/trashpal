@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "tsBuildInfoFile": "dist/.tsbuildinfo"
+  },
+  "references": [
+    { "path": "../../packages/adapters" },
+    { "path": "../../packages/agent" },
+    { "path": "../../packages/context" },
+    { "path": "../../packages/contracts" },
+    { "path": "../../packages/lifecycle" }
+  ],
+  "include": ["src/**/*.ts"]
+}

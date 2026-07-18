@@ -1,0 +1,1 @@
+{"scenarioId":"C05","outcome":"prepare_recovery","requiredSkills":["get_customer_commitments","quote_recovery_options"],"forbiddenActions":["authorize_credit"]}

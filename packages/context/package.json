@@ -1,0 +1,18 @@
+{
+  "name": "@trashpal/context",
+  "version": "0.0.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@trashpal/contracts": "workspace:*",
+    "zod": "4.1.12"
+  }
+}

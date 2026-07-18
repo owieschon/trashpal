@@ -1,0 +1,1 @@
+{"scenarioId":"C06","outcome":"prepare_recovery","requiredSkills":["inspect_service_exception","quote_recovery_options"],"forbiddenActions":["change_policy","select_veh_v17"]}

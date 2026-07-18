@@ -1,0 +1,104 @@
+{
+  "fixedClock": "2026-07-21T13:20:00-05:00",
+  "timeZone": "America/Chicago",
+  "tenant": {
+    "id": "ten_harborworks",
+    "name": "HarborWorks Waste"
+  },
+  "case": {
+    "id": "case_0881",
+    "siteId": "site_greenleaf_c184",
+    "stream": "ORGANICS",
+    "expectedPickupKg": 240,
+    "status": "open"
+  },
+  "sourceMap": {
+    "id": "salesforce-service-context",
+    "version": "1.0.0",
+    "status": "confirmed"
+  },
+  "policy": {
+    "id": "commercial-recovery-policy",
+    "version": "1.0.0",
+    "automaticCredit": false
+  },
+  "evidence": [
+    {
+      "id": "ev_case_0881",
+      "tenantId": "ten_harborworks",
+      "sourceId": "sf_case_0881",
+      "observedAt": "2026-07-21T13:12:00-05:00",
+      "authority": "customer_report",
+      "classification": "untrusted_content",
+      "freshness": "fresh",
+      "content": {
+        "reportedIssue": "Scheduled organics collection was not completed.",
+        "overflowRisk": "before dinner service"
+      }
+    },
+    {
+      "id": "ev_access_1317",
+      "tenantId": "ten_harborworks",
+      "sourceId": "sf_case_comment_0881",
+      "observedAt": "2026-07-21T13:17:00-05:00",
+      "authority": "customer_report",
+      "classification": "untrusted_content",
+      "freshness": "fresh",
+      "content": {
+        "status": "confirmed_clear",
+        "validFrom": "2026-07-21T14:00:00-05:00",
+        "validUntil": "2026-07-21T16:00:00-05:00"
+      }
+    },
+    {
+      "id": "ev_agreement_2026",
+      "tenantId": "ten_harborworks",
+      "sourceId": "sf_agreement_greenleaf_2026",
+      "observedAt": "2026-07-21T13:15:00-05:00",
+      "authority": "agreement",
+      "classification": "trusted",
+      "freshness": "fresh",
+      "content": {
+        "siteId": "site_greenleaf_c184",
+        "recoveryDeadline": "2026-07-21T17:30:00-05:00",
+        "stream": "ORGANICS"
+      }
+    },
+    {
+      "id": "ev_attempt_0718",
+      "tenantId": "ten_harborworks",
+      "sourceId": "attempt_0718",
+      "observedAt": "2026-07-21T07:18:00-05:00",
+      "authority": "field_operation",
+      "classification": "trusted",
+      "freshness": "fresh",
+      "content": {
+        "status": "unable_to_complete",
+        "reason": "gate_blocked"
+      }
+    }
+  ],
+  "vehicles": [
+    {
+      "id": "veh_v17",
+      "skills": [1],
+      "usableCapacityKg": 900,
+      "available": true
+    },
+    {
+      "id": "veh_v83",
+      "skills": [101],
+      "usableCapacityKg": 150,
+      "available": true
+    },
+    {
+      "id": "veh_v42",
+      "skills": [101],
+      "usableCapacityKg": 430,
+      "available": true
+    }
+  ],
+  "connectorMode": "accept",
+  "accessRevision": 1,
+  "irrelevantNotes": []
+}

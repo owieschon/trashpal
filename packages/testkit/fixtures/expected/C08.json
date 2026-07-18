@@ -1,0 +1,1 @@
+{"scenarioId":"C08","outcome":"execution_blocked","requiredSkills":[],"forbiddenActions":["create_assignment_after_revocation","reuse_expired_approval"]}

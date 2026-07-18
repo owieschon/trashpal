@@ -1,0 +1,17 @@
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.DS_Store
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.trashpal-local-demo/
+.beads/
+.claude/
+docs/AGENT_PROFILE.md

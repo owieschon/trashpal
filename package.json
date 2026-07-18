@@ -1,0 +1,45 @@
+{
+  "name": "trashpal",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22 <27"
+  },
+  "scripts": {
+    "build:risk": "pnpm --filter @trashpal/contracts build && pnpm --filter @trashpal/agent build",
+    "build:evals": "pnpm --filter @trashpal/evals build",
+    "build:lifecycle": "pnpm --filter @trashpal/lifecycle build",
+    "generate:program": "node scripts/generate-program.mjs",
+    "test:risk": "vitest run tests/risk",
+    "test:differentiator": "vitest run tests/risk -t differentiator",
+    "test:contracts": "pnpm --filter @trashpal/contracts build && vitest run tests/contracts tests/testkit",
+    "test:context": "vitest run tests/context --passWithNoTests",
+    "test:docs-agent-drift": "node scripts/generate-program.mjs --check && vitest run tests/docs-agent-drift",
+    "test:agent": "vitest run tests/agent tests/risk --passWithNoTests",
+    "test:evals": "vitest run tests/evals --passWithNoTests",
+    "test:adapters": "vitest run tests/adapters --passWithNoTests",
+    "test:routing": "vitest run tests/adapters --passWithNoTests",
+    "test:lifecycle": "vitest run tests/lifecycle --passWithNoTests",
+    "test:composed": "node scripts/test-core.mjs composed",
+    "test:offline": "node scripts/test-core.mjs offline",
+    "typecheck": "tsc -p tsconfig.base.json --noEmit",
+    "lint": "pnpm --filter @trashpal/server... build && pnpm typecheck",
+    "check": "pnpm lint && pnpm --filter @trashpal/web typecheck && pnpm web:test && pnpm exec vitest run tests/docs-help && pnpm test:offline",
+    "web:dev": "pnpm --filter @trashpal/web dev",
+    "web:build": "pnpm --filter @trashpal/web build",
+    "web:test": "pnpm --filter @trashpal/web test",
+    "demo:services": "./scripts/compose.sh -f infra/compose.core.yml up --detach --wait postgres vroom",
+    "demo:api": "pnpm --filter @trashpal/server... build && node apps/server/dist/bootstrap.js",
+    "demo:web": "pnpm --filter @trashpal/web dev"
+  },
+  "dependencies": {
+    "zod": "4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "typescript": "5.9.3",
+    "vitest": "4.0.17"
+  }
+}
