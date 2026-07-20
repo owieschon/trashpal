@@ -2,6 +2,8 @@
 
 TrashPal is a local operator workspace for reviewing one commercial organics collection exception, approving an exact recovery, and reconciling an uncertain dispatch before retrying it.
 
+> **Status: Work in progress.** The local demo is functional, but the repository remains under active development and is not production-ready or operational guidance.
+
 TrashPal is an independent fictional project, not an official PostHog product. It was distilled from [self-driving-trash-palace](https://github.com/owieschon/self-driving-trash-palace), the full build, including how it was built and what it does not prove.
 
 ## Why this exists
