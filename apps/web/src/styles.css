@@ -92,6 +92,13 @@ a { color: inherit; }
 .pal-run dt { margin-bottom: 5px; color: #58636d; font-size: 11px; font-weight: 700; text-transform: uppercase; }
 .pal-run dd { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; overflow-wrap: anywhere; }
 
+.access-update { grid-column: 1 / -1; margin: 0; padding: 12px 0 0; border: 0; border-top: 1px solid #c7d0d2; }
+.access-update legend { padding: 0; font-size: 13px; font-weight: 750; }
+.access-update p { margin: 4px 0 9px; color: #58636d; font-size: 13px; }
+.access-update div { display: flex; gap: 8px; }
+.access-update button { padding: 7px 10px; border: 1px solid #18202a; background: #fff; font-size: 12px; font-weight: 700; }
+.secondary-button { min-height: 42px; padding: 0 15px; border: 1px solid #18202a; background: transparent; font-size: 13px; font-weight: 740; }
+
 .brand {
   display: inline-flex;
   align-items: center;

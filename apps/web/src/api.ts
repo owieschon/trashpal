@@ -142,6 +142,14 @@ export interface ReceiptResponse extends CaseResponse {
   readonly receipt: OperatorReceipt
 }
 
+export interface EvidenceUpdateResponse extends CaseResponse {
+  readonly evidenceUpdate: {
+    readonly accessStatus: 'confirmed_clear' | 'blocked' | 'unknown'
+    readonly outcome: 'prepare_recovery' | 'hold_for_confirmation' | 'escalate'
+    readonly result: 'ready_for_review' | 'blocked_by_field_evidence' | 'needs_fresh_confirmation'
+  }
+}
+
 export type HelpTopic = 'overview' | 'prepare' | 'approve' | 'dispatch' | 'reconcile' | 'receipt' | 'developer-reference'
 
 export interface HelpArticle {
@@ -206,6 +214,13 @@ export const operatorApi = {
   },
   prepare(caseId = GREENLEAF_CASE_ID): Promise<PrepareResponse> {
     return request<PrepareResponse>(`/v1/operator/cases/${encodeURIComponent(caseId)}/prepare`, { method: 'POST' })
+  },
+  updateAccess(caseId: string, accessStatus: EvidenceUpdateResponse['evidenceUpdate']['accessStatus']): Promise<EvidenceUpdateResponse> {
+    return request<EvidenceUpdateResponse>(`/v1/operator/cases/${encodeURIComponent(caseId)}/evidence`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ accessStatus }),
+    })
   },
   approve(proposalId: string): Promise<ApprovalResponse> {
     return request<ApprovalResponse>(`/v1/operator/proposals/${encodeURIComponent(proposalId)}/approve`, { method: 'POST' })

@@ -94,6 +94,21 @@ export default function App() {
     }
   }
 
+  const updateAccess = async (accessStatus: 'confirmed_clear' | 'blocked' | 'unknown') => {
+    if (!caseView) return
+    setActionState('working')
+    setError(null)
+    try {
+      const response = await operatorApi.updateAccess(caseView.case.id, accessStatus)
+      setCaseView(response.case)
+      setNotice(`Access recorded as ${accessStatus.replaceAll('_', ' ')}. Pal reran against the changed evidence: ${response.evidenceUpdate.result.replaceAll('_', ' ')}.`)
+    } catch (caught) {
+      setError(errorMessage(caught))
+    } finally {
+      setActionState('idle')
+    }
+  }
+
   const loadHelp = async (topic: HelpTopic) => {
     setHelpLoading(true)
     setHelpTopic(topic)
@@ -227,6 +242,8 @@ export default function App() {
             label={actionLabel}
             pending={actionState === 'working'}
             onAction={() => void runAction()}
+            onEvidence={(status) => void updateAccess(status)}
+            onDecline={() => setNotice('Recovery left unapproved. No dispatch operation was created; keep the case open or record fresh evidence before rerunning Pal.')}
             onHelp={() => void openHelp()}
           />
 
@@ -412,12 +429,14 @@ function AuthoritySummary({ view }: { readonly view: CaseOperatorView }): ReactN
   )
 }
 
-function ActionPanel({ view, action, label, pending, onAction, onHelp }: {
+function ActionPanel({ view, action, label, pending, onAction, onEvidence, onDecline, onHelp }: {
   readonly view: CaseOperatorView
   readonly action: ReturnType<typeof nextOperatorAction>
   readonly label: string | null
   readonly pending: boolean
   readonly onAction: () => void
+  readonly onEvidence: (status: 'confirmed_clear' | 'blocked' | 'unknown') => void
+  readonly onDecline: () => void
   readonly onHelp: () => void
 }): ReactNode {
   if (!action || !label) {
@@ -449,6 +468,8 @@ function ActionPanel({ view, action, label, pending, onAction, onHelp }: {
       <button className="primary-button" type="button" disabled={pending} onClick={onAction}>
         {pending ? 'Working…' : label}
       </button>
+      {action === 'approve' ? <button className="secondary-button" type="button" disabled={pending} onClick={onDecline}>Do not approve</button> : null}
+      {action === 'prepare' ? <fieldset className="access-update" disabled={pending}><legend>Fresh access evidence</legend><p>Record one current observation and rerun Pal against it.</p><div><button type="button" onClick={() => onEvidence('confirmed_clear')}>Clear</button><button type="button" onClick={() => onEvidence('blocked')}>Blocked</button><button type="button" onClick={() => onEvidence('unknown')}>Unknown</button></div></fieldset> : null}
     </section>
   )
 }

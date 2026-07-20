@@ -7,6 +7,7 @@ import type { ComposedRuntime } from './composition.js'
 import { createTrashPalApi } from './api.js'
 import { safeProposalFromBinding } from './runtime.js'
 import { createSyntheticRecordedRecoveryCase } from './synthetic-source.js'
+import type { OperatorAccessStatus } from './synthetic-source.js'
 
 export const GreenleafOperatorCaseId = 'case_greenleaf-operator'
 export const GreenleafOperatorTenantId = 'ten_harborworks'
@@ -16,6 +17,7 @@ const operatorCases = {
   'case_northstar-operator': { title: 'Northstar Kitchen · organics service exception', priority: 'Recovery review queued' },
 } as const
 const OperatorCaseIdSchema = z.enum([GreenleafOperatorCaseId, 'case_riverbend-operator', 'case_northstar-operator'])
+const OperatorAccessStatusSchema = z.enum(['confirmed_clear', 'blocked', 'unknown'])
 
 const demoCookieName = 'tp_demo_session'
 const localSessionTtlSeconds = 60 * 60
@@ -184,6 +186,7 @@ export class LocalDemoSessionStore {
   readonly #authority: ComposedRuntime['authority']
   readonly #defaultDispatcherSession: string
   readonly #sessions = new Map<string, StoredLocalDemoSession>()
+  readonly #accessUpdates = new Map<string, OperatorAccessStatus>()
 
   constructor(input: Readonly<{ authority: ComposedRuntime['authority']; dispatcherSession: string }>) {
     this.#authority = input.authority
@@ -205,7 +208,7 @@ export class LocalDemoSessionStore {
     return { id, expiresAt: new Date(expiresAtMs).toISOString() }
   }
 
-  resolve(cookieValue: string | undefined): Readonly<{ userSession: string; principal: Principal; sourceSnapshotAt: Date }> {
+  resolve(cookieValue: string | undefined): Readonly<{ id: string; userSession: string; principal: Principal; sourceSnapshotAt: Date }> {
     if (!cookieValue) throw new LifecycleError('invalid_session', 'A local demo session is required.')
     const stored = this.#sessions.get(cookieValue)
     if (!stored || stored.expiresAtMs <= Date.now()) {
@@ -217,7 +220,15 @@ export class LocalDemoSessionStore {
       this.#sessions.delete(cookieValue)
       throw new LifecycleError('invalid_session', 'The local demo session no longer matches its tenant.')
     }
-    return { userSession: stored.userSession, principal, sourceSnapshotAt: new Date(stored.sourceSnapshotAt) }
+    return { id: cookieValue, userSession: stored.userSession, principal, sourceSnapshotAt: new Date(stored.sourceSnapshotAt) }
+  }
+
+  setAccessStatus(sessionId: string, caseId: string, status: OperatorAccessStatus): void {
+    this.#accessUpdates.set(`${sessionId}:${caseId}`, status)
+  }
+
+  accessStatus(sessionId: string, caseId: string): OperatorAccessStatus | undefined {
+    return this.#accessUpdates.get(`${sessionId}:${caseId}`)
   }
 
   #assertDispatcher(userSession: string): Principal {
@@ -305,13 +316,44 @@ export function createTrashPalOperatorApi(options: CreateTrashPalOperatorApiOpti
     if (current.operation && operationNeedsResolution(current.operation.state)) {
       throw new LifecycleError('operator_operation_unresolved', 'Resolve the existing operation before preparing another recovery.')
     }
-    const prepared = await runtime.pal.prepare({ tenantId: session.principal.tenantId, caseId })
+    const accessStatus = sessions.accessStatus(session.id, caseId)
+    const prepared = await runtime.pal.prepare({
+      tenantId: session.principal.tenantId,
+      caseId,
+      ...(accessStatus ? { operatorAccessStatus: accessStatus } : {}),
+    })
     if (!('lifecycle' in prepared)) {
       throw new LifecycleError('operator_preparation_not_ready', 'Pal did not prepare an executable recovery.')
     }
     return {
       case: await operatorCaseView(runtime, session, caseId),
       preparation: { proposalId: prepared.proposal.id, outcome: 'prepare_recovery' as const },
+    }
+  })
+
+  app.post('/v1/operator/cases/:caseId/evidence', async (request) => {
+    const session = resolveOperatorSession(request, sessions)
+    const caseId = pathParam(request, 'caseId')
+    assertOperatorScope(session.principal, caseId)
+    const body = z.object({ accessStatus: OperatorAccessStatusSchema }).strict().safeParse(request.body)
+    if (!body.success) throw new LifecycleError('operator_evidence_invalid', 'Choose clear, blocked, or unknown access evidence.')
+    const current = await runtime.getCaseLifecycleState(session.userSession, caseId)
+    if (current.operation && operationNeedsResolution(current.operation.state)) {
+      throw new LifecycleError('operator_operation_unresolved', 'Resolve the existing operation before recording new access evidence.')
+    }
+    sessions.setAccessStatus(session.id, caseId, body.data.accessStatus)
+    const prepared = await runtime.pal.prepare({ tenantId: session.principal.tenantId, caseId, operatorAccessStatus: body.data.accessStatus })
+    return {
+      case: await operatorCaseView(runtime, session, caseId),
+      evidenceUpdate: {
+        accessStatus: body.data.accessStatus,
+        outcome: prepared.trace.outcome,
+        result: body.data.accessStatus === 'confirmed_clear'
+          ? 'ready_for_review'
+          : body.data.accessStatus === 'blocked'
+            ? 'blocked_by_field_evidence'
+            : 'needs_fresh_confirmation',
+      },
     }
   })
 
@@ -387,7 +429,7 @@ export function createTrashPalOperatorApi(options: CreateTrashPalOperatorApiOpti
   return app
 }
 
-type OperatorSession = Readonly<{ userSession: string; principal: Principal; sourceSnapshotAt: Date }>
+type OperatorSession = Readonly<{ id: string; userSession: string; principal: Principal; sourceSnapshotAt: Date }>
 
 async function operatorCaseView(runtime: ComposedRuntime, session: OperatorSession, caseId: string): Promise<CaseOperatorView> {
   assertOperatorScope(session.principal, caseId)
@@ -659,6 +701,7 @@ function safeReceipt(
 function resolveOperatorSession(request: FastifyRequest, sessions: LocalDemoSessionStore): OperatorSession {
   return sessions.resolve(cookieValue(request.headers.cookie, demoCookieName))
 }
+
 
 function setLocalDemoCookie(reply: FastifyReply, value: string): void {
   reply.header('set-cookie', `${demoCookieName}=${encodeURIComponent(value)}; HttpOnly; Path=/; SameSite=Strict; Max-Age=${localSessionTtlSeconds}`)

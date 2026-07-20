@@ -27,6 +27,7 @@ import {
 } from '@trashpal/lifecycle'
 import {
   createSyntheticRecordedRecoveryCase,
+  type OperatorAccessStatus,
   type SyntheticRecordedRecoveryCase,
   type SyntheticRecoverySourceFactory,
 } from './synthetic-source.js'
@@ -44,6 +45,7 @@ const defaultBudget: RunBudget = {
 export interface RuntimeScope {
   readonly tenantId: string
   readonly caseId: string
+  readonly operatorAccessStatus?: OperatorAccessStatus
 }
 
 export interface SafeContextEnvelope {
@@ -655,9 +657,14 @@ function safeStopCode(outcome: Awaited<ReturnType<typeof runBoundedPal>>['outcom
 }
 
 function normalizeScope(input: RuntimeScope): RuntimeScope {
+  const accessStatus = input.operatorAccessStatus
+  if (accessStatus !== undefined && accessStatus !== 'confirmed_clear' && accessStatus !== 'blocked' && accessStatus !== 'unknown') {
+    throw new Error('PAL_OPERATOR_ACCESS_STATUS_INVALID')
+  }
   return {
     tenantId: TenantIdSchema.parse(input.tenantId),
     caseId: CaseIdSchema.parse(input.caseId),
+    ...(accessStatus ? { operatorAccessStatus: accessStatus } : {}),
   }
 }
 

@@ -222,6 +222,41 @@ describePostgres('local operator facade', () => {
     noWorkerLeak(value, initial.response)
   })
 
+  it('accepts one bounded access observation and returns distinct rerun results', async () => {
+    const value = harness()
+    const cookie = await localCookie(value)
+    const queue = await request(value.app, cookie, { method: 'GET', url: '/v1/operator/cases' })
+    expect(queue.response.statusCode).toBe(200)
+    expect(queue.body.cases).toHaveLength(3)
+
+    const blocked = await request(value.app, cookie, {
+      method: 'POST',
+      url: '/v1/operator/cases/case_riverbend-operator/evidence',
+      payload: { accessStatus: 'blocked' },
+    })
+    expect(blocked.response.statusCode).toBe(200)
+    expect(field(blocked.body, 'evidenceUpdate')).toMatchObject({ accessStatus: 'blocked', result: 'blocked_by_field_evidence' })
+    expect(field(blocked.body, 'case').proposal).toBeUndefined()
+
+    const unknown = await request(value.app, cookie, {
+      method: 'POST',
+      url: '/v1/operator/cases/case_northstar-operator/evidence',
+      payload: { accessStatus: 'unknown' },
+    })
+    expect(unknown.response.statusCode).toBe(200)
+    expect(field(unknown.body, 'evidenceUpdate')).toMatchObject({ accessStatus: 'unknown', result: 'needs_fresh_confirmation' })
+
+    const clear = await request(value.app, cookie, {
+      method: 'POST',
+      url: `/v1/operator/cases/${GreenleafOperatorCaseId}/evidence`,
+      payload: { accessStatus: 'confirmed_clear' },
+    })
+    expect(clear.response.statusCode).toBe(200)
+    expect(field(clear.body, 'evidenceUpdate')).toMatchObject({ accessStatus: 'confirmed_clear', result: 'ready_for_review', outcome: 'prepare_recovery' })
+    expect(field(clear.body, 'case').proposal).toBeDefined()
+    noWorkerLeak(value, clear.response)
+  })
+
   it('rejects caller identity, missing sessions, and cross-tenant operator access', async () => {
     const value = harness()
     const cookie = await localCookie(value)

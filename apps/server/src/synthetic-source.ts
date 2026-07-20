@@ -19,6 +19,8 @@ export interface SyntheticRecoveryScope {
   readonly caseId: string
 }
 
+export type OperatorAccessStatus = 'confirmed_clear' | 'blocked' | 'unknown'
+
 export interface SyntheticRecordedRecoveryCase {
   readonly scope: SyntheticRecoveryScope
   readonly source: RecoveryContextSource
@@ -38,6 +40,8 @@ export type SyntheticRecoverySourceFactory = (input: {
   readonly tenantId: string
   readonly caseId: string
   readonly now: Date
+  /** A bounded, operator-recorded access observation for the local demo. */
+  readonly operatorAccessStatus?: OperatorAccessStatus
 }) => SyntheticRecordedRecoveryCase
 
 const hourMs = 60 * 60 * 1_000
@@ -72,7 +76,7 @@ function sourceRevision(now: Date): number {
  * the context compiler enforces. Values are generated from the injected clock
  * so a composition run never relies on a historical fixture date.
  */
-export const createSyntheticRecordedRecoveryCase: SyntheticRecoverySourceFactory = ({ tenantId: tenantInput, caseId: caseInput, now: clockNow }) => {
+export const createSyntheticRecordedRecoveryCase: SyntheticRecoverySourceFactory = ({ tenantId: tenantInput, caseId: caseInput, now: clockNow, operatorAccessStatus }) => {
   const tenantId = TenantIdSchema.parse(tenantInput)
   const caseId = CaseIdSchema.parse(caseInput)
   const now = requiredNow(clockNow)
@@ -159,6 +163,11 @@ export const createSyntheticRecordedRecoveryCase: SyntheticRecoverySourceFactory
         Status__c: 'unable_to_complete',
         Reason__c: 'access_was_not_confirmed_at_arrival',
         Observed_At__c: fieldAttemptAt,
+        ...(operatorAccessStatus ? {
+          Access_Status__c: operatorAccessStatus,
+          Access_Valid_From__c: nowIso,
+          Access_Valid_Until__c: accessValidUntil,
+        } : {}),
       }],
       caseHistory: [
         {
