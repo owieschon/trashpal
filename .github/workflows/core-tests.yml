@@ -18,7 +18,7 @@ jobs:
   core:
     name: Core contract suite
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 35
     env:
       TEST_DATABASE_URL: postgresql://trashpal:trashpal_local_only@127.0.0.1:54329/trashpal_core_test
       POSTGRES_REQUIRE_REAL: "1"
@@ -77,6 +77,14 @@ jobs:
         env:
           TRASHPAL_COMPOSED_TEST_SERVICES: provided
         run: pnpm test:composed
+
+      - name: Install Chromium for browser workflow tests
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run browser workflow tests against provided local services
+        env:
+          TRASHPAL_COMPOSED_TEST_SERVICES: provided
+        run: pnpm test:browser
 
   endor:
     name: Endor Labs security scan

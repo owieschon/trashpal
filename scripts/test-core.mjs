@@ -367,6 +367,13 @@ export function runComposedTests(environment = process.env) {
   ], testEnvironment)
 }
 
+export function runBrowserTests(environment = process.env) {
+  const configured = localComposedTestEnvironment(environment)
+  bootstrapLocalServices(configured)
+  const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+  command(pnpm, ['exec', 'playwright', 'test'], configured)
+}
+
 function main(args) {
   const [mode, ...flags] = args
   // The validation commands are intentionally accepted without a mode for
@@ -387,7 +394,8 @@ function main(args) {
   }
   if (mode === 'offline') return runOfflineTests()
   if (mode === 'composed') return runComposedTests()
-  throw new ComposedTestConfigurationError('Usage: node scripts/test-core.mjs <offline|composed>.')
+  if (mode === 'browser') return runBrowserTests()
+  throw new ComposedTestConfigurationError('Usage: node scripts/test-core.mjs <offline|composed|browser>.')
 }
 
 // Preload execution must occur before a test worker's entry module runs.

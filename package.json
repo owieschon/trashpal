@@ -23,6 +23,7 @@
     "test:routing": "vitest run tests/adapters --passWithNoTests",
     "test:lifecycle": "vitest run tests/lifecycle --passWithNoTests",
     "test:composed": "node scripts/test-core.mjs composed",
+    "test:browser": "node scripts/test-core.mjs browser",
     "test:offline": "node scripts/test-core.mjs offline",
     "typecheck": "tsc -p tsconfig.base.json --noEmit",
     "lint": "pnpm --filter @trashpal/server... build && pnpm typecheck",
@@ -38,6 +39,7 @@
     "zod": "4.1.12"
   },
   "devDependencies": {
+    "@playwright/test": "1.61.1",
     "@types/node": "24.10.1",
     "typescript": "5.9.3",
     "vitest": "4.0.17"
