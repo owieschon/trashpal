@@ -706,7 +706,7 @@ function operationActivityLabel(state: OperationState): string {
 
 function operationActivityDetail(state: OperationState): string {
   if (state === 'reserved') return 'Deterministic code created the approved operation before any provider call.'
-  if (state === 'unknown') return 'Dispatch outcome unknown — Pal queried the existing operation instead of retrying.'
+  if (state === 'unknown') return 'Dispatch outcome unknown: Pal queried the existing operation instead of retrying.'
   if (state === 'assignment_reconciled') return 'The existing provider assignment was found without sending a duplicate recovery.'
   return `The durable operation advanced to ${state.replaceAll('_', ' ')}.`
 }

@@ -375,7 +375,7 @@ describePostgres('local operator facade', () => {
     expect(dispatched.response.statusCode).toBe(200)
     expect(field(dispatched.body, 'operation').state).toBe('unknown')
     expect(JSON.stringify(field(dispatched.body, 'case'))).toContain(
-      'Dispatch outcome unknown — Pal queried the existing operation instead of retrying.',
+      'Dispatch outcome unknown: Pal queried the existing operation instead of retrying.',
     )
     noWorkerLeak(value, dispatched.response)
     const duplicateDispatch = await request(value.app, cookie, {
