@@ -9,6 +9,7 @@ import {
   type HelpTopic,
   type LocalOperatorSession,
   type OperatorAction,
+  type OperatorQueueCase,
   type OperatorReceipt,
 } from './api.js'
 import { formatCaseTime, formatTimeRange, humanize, shortDigest } from './format.js'
@@ -31,6 +32,7 @@ export default function App() {
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [actionState, setActionState] = useState<ActionState>('idle')
   const [session, setSession] = useState<LocalOperatorSession | null>(null)
+  const [queue, setQueue] = useState<readonly OperatorQueueCase[]>([])
   const [caseView, setCaseView] = useState<CaseOperatorView | null>(null)
   const [receipt, setReceipt] = useState<OperatorReceipt | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -43,13 +45,15 @@ export default function App() {
   const [helpError, setHelpError] = useState<string | null>(null)
   const returnFocusRef = useRef<HTMLElement | null>(null)
 
-  const loadWorkspace = async () => {
+  const loadWorkspace = async (caseId = GREENLEAF_CASE_ID) => {
     setLoadState('loading')
     setError(null)
     try {
       const activeSession = await operatorApi.startLocalSession()
-      const response = await operatorApi.getCase(GREENLEAF_CASE_ID)
+      const cases = await operatorApi.listCases()
+      const response = await operatorApi.getCase(caseId)
       setSession(activeSession)
+      setQueue(cases)
       setCaseView(response.case)
       if (response.case.operation && response.case.receiptAvailable) {
         const receiptResponse = await operatorApi.getReceipt(response.case.operation.id)
@@ -161,6 +165,15 @@ export default function App() {
         </div>
       </header>
 
+      <nav className="case-queue" aria-label="Exception queue">
+        <div><p className="eyebrow">Exception queue</p><strong>{queue.length || 3} local scenarios</strong></div>
+        <div className="case-queue__items">
+          {queue.map((item) => <button key={item.id} type="button" className={item.id === caseView.case.id ? 'case-queue__item is-selected' : 'case-queue__item'} onClick={() => void loadWorkspace(item.id)} disabled={actionState === 'working'}>
+            <span>{item.title}</span><small>{item.priority}</small>
+          </button>)}
+        </div>
+      </nav>
+
       <section className="case-head" aria-labelledby="case-title">
         <div>
           <p className="eyebrow">Service exception · {caseView.case.serviceType}</p>
@@ -220,6 +233,7 @@ export default function App() {
           {notice ? <p className="notice" role="status">{notice}</p> : null}
           {error ? <p className="inline-error" role="alert">{error}</p> : null}
 
+          {caseView.palRun ? <PalRunSummary run={caseView.palRun} /> : null}
           <ActivityStream activity={caseView.activity} timeZone={caseView.case.timeZone} />
         </section>
 
@@ -237,6 +251,16 @@ export default function App() {
       {showOrientation ? <OrientationDialog onClose={dismissOrientation} onHelp={() => { hideOrientation(false); void openHelp(undefined, true) }} /> : null}
       {showHelp ? <HelpDrawer article={helpArticle} error={helpError} loading={helpLoading} topic={helpTopic} onSelectTopic={(topic) => void loadHelp(topic)} onClose={closeHelp} /> : null}
     </main>
+  )
+}
+
+function PalRunSummary({ run }: { readonly run: NonNullable<CaseOperatorView['palRun']> }): ReactNode {
+  return (
+    <section className="pal-run" aria-labelledby="pal-run-title">
+      <div><p className="eyebrow">Inspectable Pal run</p><h2 id="pal-run-title">What Pal used</h2></div>
+      <p><strong>{run.skillCount} bounded skill calls.</strong> Outcome: {humanize(run.outcome)}. Reasoner: local deterministic; no model provider was contacted.</p>
+      <dl><div><dt>Included context</dt><dd>{run.includedEvidence.join(', ') || 'None'}</dd></div><div><dt>Omitted context</dt><dd>{run.omittedEvidence.join(', ') || 'None'}</dd></div><div><dt>Conflicts</dt><dd>{run.conflicts.join(', ') || 'None'}</dd></div></dl>
+    </section>
   )
 }
 

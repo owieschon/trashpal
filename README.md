@@ -12,6 +12,30 @@ TrashPal began as a demonstration for a friend who works at a local company that
 
 The company did not sponsor, test, or endorse TrashPal. The missed-collection workflow and all repository data are fictional; they are a design exercise, not a representation of that company's operations.
 
+## One-minute reviewer path
+
+TrashPal shows a bounded agent operating around a physical service exception. Pal may inspect case-scoped evidence and prepare a cited recovery. Deterministic lifecycle code, not Pal, enforces approval, creates the durable operation, sends the dispatch request, and reconciles an uncertain acknowledgement.
+
+```mermaid
+flowchart LR
+  A[Recorded synthetic case] --> B[Pal: bounded investigation]
+  B --> C{Cited recovery?}
+  C -->|Yes| D[Dispatcher approves exact binding]
+  C -->|No| E[Hold or escalate]
+  D --> F[Deterministic reservation and dispatch]
+  F --> G[Reconcile outcome and receipt]
+```
+
+The default local demo uses a deterministic reasoner and does **not** contact a model provider. It is an architecture demonstration, not evidence of live-model quality or operational performance.
+
+Run the complete local verification suite with:
+
+```sh
+pnpm check
+```
+
+Read the [architecture contract](docs/architecture/CORE_BUILD_CONTRACT.md), [synthetic scenario corpus](docs/architecture/SYNTHETIC_SEED_CORPUS.md), and [local verification receipt](artifacts/evidence/core-build-local-receipt.md). The receipt documents what the local fixtures prove and, equally importantly, their limits.
+
 ## Run the local demo
 
 Use Node 22 or later, Corepack, and Docker. Install the pinned dependencies once with `corepack enable && pnpm install --frozen-lockfile`.

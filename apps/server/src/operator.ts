@@ -8,9 +8,14 @@ import { createTrashPalApi } from './api.js'
 import { safeProposalFromBinding } from './runtime.js'
 import { createSyntheticRecordedRecoveryCase } from './synthetic-source.js'
 
-/** The only seeded case on the local operator surface. */
 export const GreenleafOperatorCaseId = 'case_greenleaf-operator'
 export const GreenleafOperatorTenantId = 'ten_harborworks'
+const operatorCases = {
+  [GreenleafOperatorCaseId]: { title: 'Greenleaf Café · organics service exception', priority: 'Service window closing' },
+  'case_riverbend-operator': { title: 'Riverbend Market · organics service exception', priority: 'Access confirmation needed' },
+  'case_northstar-operator': { title: 'Northstar Kitchen · organics service exception', priority: 'Recovery review queued' },
+} as const
+const OperatorCaseIdSchema = z.enum([GreenleafOperatorCaseId, 'case_riverbend-operator', 'case_northstar-operator'])
 
 const demoCookieName = 'tp_demo_session'
 const localSessionTtlSeconds = 60 * 60
@@ -90,16 +95,26 @@ const OperatorActivitySchema = z.object({
   occurredAt: z.iso.datetime({ offset: true }).optional(),
 }).strict()
 
+const OperatorPalRunSchema = z.object({
+  outcome: z.enum(['prepare_recovery', 'hold_for_confirmation', 'escalate']),
+  stopCode: z.enum(['proposal_validated', 'human_confirmation_required', 'safe_recovery_not_prepared']),
+  skillCount: z.number().int().nonnegative(),
+  includedEvidence: z.array(z.string().min(1)),
+  omittedEvidence: z.array(z.string().min(1)),
+  conflicts: z.array(z.string().min(1)),
+  reasoner: z.literal('deterministic_local'),
+}).strict()
+
 /**
  * The browser-facing case shape. It is a typed presentation projection, not a
  * serialized CRM record, model context, execution snapshot, or worker trace.
  */
 export const CaseOperatorViewSchema = z.object({
   case: z.object({
-    id: z.literal(GreenleafOperatorCaseId),
-    title: z.literal('Greenleaf Café · organics service exception'),
+    id: OperatorCaseIdSchema,
+    title: z.string().min(1),
     serviceType: z.literal('Organics collection'),
-    priority: z.literal('Service window closing'),
+    priority: z.string().min(1),
     timeZone: z.literal('America/Chicago'),
     serviceWindowEndsAt: z.iso.datetime({ offset: true }),
   }).strict(),
@@ -111,6 +126,7 @@ export const CaseOperatorViewSchema = z.object({
   }).strict(),
   evidence: z.array(OperatorEvidenceSchema).length(4),
   activity: z.array(OperatorActivitySchema).min(1),
+  palRun: OperatorPalRunSchema.optional(),
   proposal: OperatorProposalSchema.optional(),
   approval: z.object({
     digest: z.string().regex(/^[a-f0-9]{64}$/),
@@ -275,6 +291,11 @@ export function createTrashPalOperatorApi(options: CreateTrashPalOperatorApiOpti
     return { case: await operatorCaseView(runtime, session, pathParam(request, 'caseId')) }
   })
 
+  app.get('/v1/operator/cases', async (request) => {
+    resolveOperatorSession(request, sessions)
+    return { cases: Object.entries(operatorCases).map(([id, metadata]) => ({ id, ...metadata })) }
+  })
+
   app.post('/v1/operator/cases/:caseId/prepare', async (request) => {
     assertEmptyBody(request.body)
     const session = resolveOperatorSession(request, sessions)
@@ -301,7 +322,7 @@ export function createTrashPalOperatorApi(options: CreateTrashPalOperatorApiOpti
     const approval = await runtime.repository.approve(session.userSession, proposal.id)
     const reservation = await runtime.repository.reserve(session.userSession, approval.digest)
     return {
-      case: await operatorCaseView(runtime, session, GreenleafOperatorCaseId),
+      case: await operatorCaseView(runtime, session, proposal.caseId),
       approval: {
         digest: approval.digest,
         proposalDigest: approval.proposalDigest,
@@ -331,10 +352,10 @@ export function createTrashPalOperatorApi(options: CreateTrashPalOperatorApiOpti
     assertEmptyBody(request.body)
     const session = resolveOperatorSession(request, sessions)
     const operationId = pathParam(request, 'operationId')
-    await assertOperatorOperation(runtime, session, operationId)
+    const existing = await assertOperatorOperation(runtime, session, operationId)
     const operation = await runtime.dispatchOperation(runtime.workers.dispatch, operationId)
     return {
-      case: await operatorCaseView(runtime, session, GreenleafOperatorCaseId),
+      case: await operatorCaseView(runtime, session, existing.snapshot.caseId),
       operation: safeOperation(operation),
     }
   })
@@ -343,11 +364,11 @@ export function createTrashPalOperatorApi(options: CreateTrashPalOperatorApiOpti
     assertEmptyBody(request.body)
     const session = resolveOperatorSession(request, sessions)
     const operationId = pathParam(request, 'operationId')
-    await assertOperatorOperation(runtime, session, operationId)
+    const existing = await assertOperatorOperation(runtime, session, operationId)
     const operation = await runtime.reconcile(runtime.workers.dispatch, operationId)
     const receipt = await runtime.repository.receipt(session.userSession, operationId)
     return {
-      case: await operatorCaseView(runtime, session, GreenleafOperatorCaseId),
+      case: await operatorCaseView(runtime, session, existing.snapshot.caseId),
       operation: safeOperation(operation),
       receipt: safeReceipt(receipt, operation),
     }
@@ -358,7 +379,7 @@ export function createTrashPalOperatorApi(options: CreateTrashPalOperatorApiOpti
     const operationId = pathParam(request, 'operationId')
     const operation = await assertOperatorOperation(runtime, session, operationId)
     return {
-      case: await operatorCaseView(runtime, session, GreenleafOperatorCaseId),
+      case: await operatorCaseView(runtime, session, operation.snapshot.caseId),
       receipt: safeReceipt(await runtime.repository.receipt(session.userSession, operationId), operation),
     }
   })
@@ -370,8 +391,10 @@ type OperatorSession = Readonly<{ userSession: string; principal: Principal; sou
 
 async function operatorCaseView(runtime: ComposedRuntime, session: OperatorSession, caseId: string): Promise<CaseOperatorView> {
   assertOperatorScope(session.principal, caseId)
+  const metadata = operatorCases[OperatorCaseIdSchema.parse(caseId)]
   const state = await runtime.getCaseLifecycleState(session.userSession, caseId)
   const proposal = state.proposal ? safeProposalFromBinding(state.proposal) : undefined
+  const palRun = runtime.pal.getLatestRun({ tenantId: session.principal.tenantId, caseId })
   const historicalOperation = !proposal && state.operation !== undefined
   const serviceWindowEndsAt = state.serviceDeadline ?? createSyntheticRecordedRecoveryCase({
     tenantId: session.principal.tenantId,
@@ -428,16 +451,25 @@ async function operatorCaseView(runtime: ComposedRuntime, session: OperatorSessi
       ]
   const view = {
     case: {
-      id: GreenleafOperatorCaseId,
-      title: 'Greenleaf Café · organics service exception',
+      id: caseId,
+      title: metadata.title,
       serviceType: 'Organics collection',
-      priority: 'Service window closing',
+      priority: metadata.priority,
       timeZone: 'America/Chicago',
       serviceWindowEndsAt,
     },
     summary,
     evidence,
     activity: operatorActivity(state, session.sourceSnapshotAt),
+    ...(palRun ? { palRun: {
+      outcome: palRun.trace.outcome,
+      stopCode: palRun.trace.stopCode,
+      skillCount: palRun.trace.skillInvocations.length,
+      includedEvidence: palRun.contextEnvelope.includedEvidence.map((item) => item.evidenceId),
+      omittedEvidence: palRun.contextEnvelope.omittedEvidence.map((item) => item.evidenceId),
+      conflicts: palRun.contextEnvelope.conflicts.map((item) => item.reason),
+      reasoner: 'deterministic_local' as const,
+    } } : {}),
     ...(proposal ? {
       proposal: {
         id: proposal.id,
@@ -578,7 +610,7 @@ async function assertOperatorOperation(
 }
 
 function assertOperatorScope(principal: Principal, caseId: string): void {
-  if (principal.tenantId !== GreenleafOperatorTenantId || caseId !== GreenleafOperatorCaseId) {
+  if (principal.tenantId !== GreenleafOperatorTenantId || !OperatorCaseIdSchema.safeParse(caseId).success) {
     throw new LifecycleError('case_not_found', 'The local operator case does not exist in the resolved tenant.')
   }
 }

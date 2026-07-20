@@ -132,7 +132,7 @@ The fixture contains one depot, three current vehicle positions, committed work,
 | `veh_v83` | ORGANICS-capable; 150 kg usable capacity after committed work | VROOM or host capacity validation rejects it |
 | `veh_v42` | ORGANICS-capable; 430 kg usable capacity; shift ends 17:00 | The only feasible recovery candidate |
 
-The desired C01 quote is `route_quote_greenleaf_01`: `veh_v42`, a 14:24–14:39 service interval, 22 minutes incremental route impact, and 190 kg remaining capacity. This is an **expected oracle**, not a claim of a completed integration until P1's real VROOM test proves it.
+The desired C01 quote is `route_quote_greenleaf_01`: `veh_v42`, a 14:24–14:39 service interval, 22 minutes incremental route impact, and 190 kg remaining capacity. It is an independent expected oracle reproduced by the real local VROOM integration; see the [local verification receipt](../../artifacts/evidence/core-build-local-receipt.md).
 
 The host must validate both ends of the customer access interval:
 

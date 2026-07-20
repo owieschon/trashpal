@@ -74,6 +74,15 @@ export interface CaseOperatorView {
     readonly status: 'complete' | 'current'
     readonly occurredAt?: string
   }[]
+  readonly palRun?: {
+    readonly outcome: 'prepare_recovery' | 'hold_for_confirmation' | 'escalate'
+    readonly stopCode: 'proposal_validated' | 'human_confirmation_required' | 'safe_recovery_not_prepared'
+    readonly skillCount: number
+    readonly includedEvidence: readonly string[]
+    readonly omittedEvidence: readonly string[]
+    readonly conflicts: readonly string[]
+    readonly reasoner: 'deterministic_local'
+  }
   readonly proposal?: OperatorProposal
   readonly approval?: {
     readonly digest: string
@@ -87,6 +96,12 @@ export interface CaseOperatorView {
     readonly label: string
     readonly requiresApproval: boolean
   }
+}
+
+export interface OperatorQueueCase {
+  readonly id: string
+  readonly title: string
+  readonly priority: string
 }
 
 export interface LocalOperatorSession {
@@ -182,6 +197,13 @@ export const operatorApi = {
   getCase(caseId = GREENLEAF_CASE_ID): Promise<CaseResponse> {
     return request<CaseResponse>(`/v1/operator/cases/${encodeURIComponent(caseId)}`)
   },
+  async listCases(): Promise<readonly OperatorQueueCase[]> {
+    const response = await request<{ cases?: unknown }>('/v1/operator/cases')
+    if (!Array.isArray(response.cases) || !response.cases.every(isOperatorQueueCase)) {
+      throw new OperatorApiError('The local operator queue returned an invalid case.', 502)
+    }
+    return response.cases
+  },
   prepare(caseId = GREENLEAF_CASE_ID): Promise<PrepareResponse> {
     return request<PrepareResponse>(`/v1/operator/cases/${encodeURIComponent(caseId)}/prepare`, { method: 'POST' })
   },
@@ -207,6 +229,12 @@ export const operatorApi = {
     }
     return response.article
   },
+}
+
+function isOperatorQueueCase(value: unknown): value is OperatorQueueCase {
+  if (!value || typeof value !== 'object') return false
+  const item = value as Record<string, unknown>
+  return typeof item.id === 'string' && typeof item.title === 'string' && typeof item.priority === 'string'
 }
 
 function isHelpArticle(value: unknown): value is HelpArticle {

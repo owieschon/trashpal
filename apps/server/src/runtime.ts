@@ -215,6 +215,7 @@ export class LocalCompositionRuntime {
   readonly #budget: RunBudget
   readonly #pricing: Readonly<{ inputUsdPerMillion: number; outputUsdPerMillion: number }>
   readonly #runs = new Map<string, RetainedPalRun>()
+  readonly #latestRunByScope = new Map<string, string>()
 
   constructor(options: LocalCompositionRuntimeOptions) {
     this.#repository = options.repository
@@ -283,6 +284,7 @@ export class LocalCompositionRuntime {
 
     const retained = retainRun(scope, now, result)
     this.#runs.set(runKey(scope, runToken), retained)
+    this.#latestRunByScope.set(scopeKey(scope), runToken)
     if (!result.proposal || result.outcome !== 'prepare_recovery') {
       return structuredClone(retained)
     }
@@ -322,6 +324,13 @@ export class LocalCompositionRuntime {
     const scope = normalizeScope(input)
     const run = this.#runs.get(runKey(scope, input.runToken))
     return run ? structuredClone(run) : undefined
+  }
+
+  /** Safe local-demo inspection seam; the browser receives a reduced projection. */
+  getLatestRun(input: RuntimeScope): RetainedPalRun | undefined {
+    const scope = normalizeScope(input)
+    const token = this.#latestRunByScope.get(scopeKey(scope))
+    return token ? this.getRun({ ...scope, runToken: token }) : undefined
   }
 
 }
@@ -667,6 +676,10 @@ function currentTime(clock: Clock): Date {
 
 function runKey(scope: RuntimeScope, runToken: string): string {
   return contentDigest({ tenantId: scope.tenantId, caseId: scope.caseId, runToken })
+}
+
+function scopeKey(scope: RuntimeScope): string {
+  return `${scope.tenantId}:${scope.caseId}`
 }
 
 /**

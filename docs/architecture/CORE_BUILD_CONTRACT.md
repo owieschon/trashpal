@@ -4,7 +4,7 @@ This document defines the first executable TrashPal product slice: a safe, conte
 
 ## Status
 
-Revised for the bounded-agent core build on 2026-07-16 and its local P7 follow-on on 2026-07-17. The core remains intentionally headless. P7 adds a browser-safe operator facade and docs-as-code Help Center that consume the core's authority and lifecycle boundaries without changing them. Live OAuth, OSRM road data, live model evaluation, PostHog observation, and deployment remain outside the implemented local scope. One canonical program source and generated human reference are inside the contract because context drift is part of the core behavior.
+TrashPal implements a bounded-agent recovery loop with a browser-safe local operator facade and docs-as-code Help Center. The interface consumes the same authority and lifecycle boundaries as the core; it does not expand them. Local PostgreSQL and VROOM services are part of the implemented demo. Live OAuth, CRM transport, OSRM road data, model-provider evaluation, analytics ingestion, and production deployment remain outside its scope. One canonical program source and generated human reference are part of the contract because context drift is a product risk.
 
 ## Product boundary
 
@@ -41,7 +41,7 @@ Pal may prepare a recovery proposal. Only an authorized dispatcher can approve a
 | VROOM adapter | Feasibility quote against explicit constraints | Route dispatch, commercial policy, customer promises |
 | Pal harness | Case-scoped evidence investigation, context selection, stopping judgment, and a cited typed proposal | Direct dispatch, credit approval, policy mutation, arbitrary browsing, or deterministic routing |
 | Approval and operation ledger | Authenticated server-resolved human authority, exact-payload and evidence-version binding, atomic reservation, idempotency, revalidation, reconciliation | Treating a request acknowledgement as verified work, trusting caller-supplied identity, or allowing any same-tenant actor to approve |
-| PostHog, later | Product and agent observation, evaluation, and self-driving product changes | A customer dispatch decision |
+| Analytics boundary | No analytics service is contacted by the local demo | A customer dispatch decision |
 
 ## Context boundary
 
@@ -79,7 +79,7 @@ infra/
   vroom/                     local VROOM integration profile and pinned solver configuration
 ```
 
-PostgreSQL and Drizzle provide durable local state once the lifecycle is implemented. The initial VROOM integration uses a fixed custom travel-time matrix. OSRM is a later matrix provider behind the same route-planner port because extracting and preprocessing map data does not test the core product thesis.
+PostgreSQL and Drizzle provide durable local lifecycle state. VROOM uses a fixed custom travel-time matrix in the local demo. OSRM remains a possible matrix provider behind the same route-planner port; extracting and preprocessing map data is outside this product slice.
 
 ## Ports
 
@@ -159,7 +159,7 @@ Execution creates a transactional reservation that conditionally checks the curr
 
 The corpus uses one fixed operational snapshot: Tuesday, 2026-07-21, 13:20 America/Chicago. Every record includes stable ID, tenant ID, source ID, observed time, authority classification, freshness, and content hash. It contains no real customer data or addresses.
 
-The exact fixture and independent-oracle contract lives in [SYNTHETIC_SEED_CORPUS.md](SYNTHETIC_SEED_CORPUS.md). The C01 route quote is deliberately a risk-slice target: it becomes an accepted oracle only after the real VROOM integration reproduces it.
+The exact fixture and independent-oracle contract lives in [SYNTHETIC_SEED_CORPUS.md](SYNTHETIC_SEED_CORPUS.md). The C01 route quote is reproduced by the real local VROOM integration; see the [local verification receipt](../../artifacts/evidence/core-build-local-receipt.md).
 
 ```text
 fixtures/
@@ -239,21 +239,21 @@ The representative differentiator test must reject this competent but unsafe gen
 
 The required result selects `veh_v42`, cites the service agreement, access confirmation, failed attempt, route quote, and context bundle, and requires an authenticated, server-resolved dispatcher approval. The dispatched assignment must exactly equal the immutable approved `veh_v42` quote and work-order snapshot. A changing SLA, stale quote, unconfirmed access, expired approval, same-tenant impersonation, edited proposal, cross-tenant record, assignment tampering, or lost acknowledgement must change the result or block execution.
 
-## Optimized build order
+## Verification layers
 
-1. Prove the bounded investigation protocol against opaque external source worlds before building infrastructure.
-2. Freeze domain IDs, context and trace schemas, canonical program content, fixed clock, seed loader, and independent expected outcomes.
-3. Build the context and Pal lane, deterministic routing and connector lane, and durable lifecycle lane against those shared contracts.
-4. Compare all five evaluation paths and keep model promotion ineligible until live statistical evidence exists.
-5. Prove proposal, approval, unknown-outcome reconciliation, evidence states, and receipts through the composed API.
-6. Add C02–C11 negative, security, drift, context-budget, and no-egress checks.
-7. Add the local operator UX and Help Center as a separate layer over the core. Keep live Salesforce transport, live model evaluation, PostHog observation, and deployment as separately evidenced follow-on work.
+1. The bounded investigation protocol runs against opaque recorded source worlds.
+2. Domain IDs, context and trace schemas, canonical program content, fixed clock, seed loader, and independent expected outcomes are frozen together.
+3. Context, Pal, deterministic routing, connector, and durable lifecycle lanes share those contracts.
+4. Comparative paths remain ineligible for model promotion until live statistical evidence exists.
+5. The composed API proves proposal, approval, unknown-outcome reconciliation, evidence states, and receipts.
+6. C02–C11 cover negative, security, drift, context-budget, and no-egress checks.
+7. The local operator workspace and Help Center expose the same bounded workflow. Live Salesforce transport, model evaluation, analytics ingestion, and deployment need separate evidence.
 
 ## Explicit exclusions
 
-- The core packages contain no user interface. The local P7 operator facade is a separate browser-safe layer over the core; it does not expand core authority.
-- The core packages contain no Help Center, tutorial, RAG index, or knowledge-base authoring. The P7 docs-as-code Help Center is a separate local guidance layer; it does not change the program contract.
+- The core packages contain no user interface. The browser-safe operator facade is a separate layer over the core; it does not expand core authority.
+- The core packages contain no Help Center, tutorial, RAG index, or knowledge-base authoring. The docs-as-code Help Center is a separate local guidance layer; it does not change the program contract.
 - No live Salesforce OAuth, CRM write-back, or production route platform.
 - No OSRM geographic extract or map UI in the first slice.
 - No generic chatbot, autonomous dispatch, automatic credits, or policy self-mutation.
-- No deployment, GitHub publication, paid model call, or PostHog network event without separate approval and retained evidence.
+- No production deployment, paid model call, or analytics network event without separate approval and retained evidence.
