@@ -1,4 +1,4 @@
-export type EvidenceStatus = 'confirmed' | 'observed' | 'pending'
+export type EvidenceStatus = 'confirmed' | 'observed' | 'pending' | 'blocked' | 'unknown'
 
 export interface OperatorEvidence {
   readonly id: string
@@ -78,8 +78,8 @@ export interface CaseOperatorView {
     readonly outcome: 'prepare_recovery' | 'hold_for_confirmation' | 'escalate'
     readonly stopCode: 'proposal_validated' | 'human_confirmation_required' | 'safe_recovery_not_prepared'
     readonly skillCount: number
-    readonly includedEvidence: readonly string[]
-    readonly omittedEvidence: readonly string[]
+    readonly includedEvidence: readonly OperatorContextEvidence[]
+    readonly omittedEvidence: readonly OperatorContextEvidence[]
     readonly conflicts: readonly string[]
     readonly reasoner: 'deterministic_local'
   }
@@ -98,10 +98,19 @@ export interface CaseOperatorView {
   }
 }
 
+export interface OperatorContextEvidence {
+  readonly id: string
+  readonly label: string
+  readonly source: string
+  readonly freshness: string
+  readonly reason: string
+}
+
 export interface OperatorQueueCase {
   readonly id: string
   readonly title: string
   readonly priority: string
+  readonly state: string
 }
 
 export interface LocalOperatorSession {
@@ -249,7 +258,7 @@ export const operatorApi = {
 function isOperatorQueueCase(value: unknown): value is OperatorQueueCase {
   if (!value || typeof value !== 'object') return false
   const item = value as Record<string, unknown>
-  return typeof item.id === 'string' && typeof item.title === 'string' && typeof item.priority === 'string'
+  return typeof item.id === 'string' && typeof item.title === 'string' && typeof item.priority === 'string' && typeof item.state === 'string'
 }
 
 function isHelpArticle(value: unknown): value is HelpArticle {

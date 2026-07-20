@@ -9,6 +9,7 @@ import {
   type HelpTopic,
   type LocalOperatorSession,
   type OperatorAction,
+  type OperatorContextEvidence,
   type OperatorQueueCase,
   type OperatorReceipt,
 } from './api.js'
@@ -85,6 +86,7 @@ export default function App() {
       const response = await executeAction(caseView, operatorAction)
       if (!response) return
       setCaseView(response.case)
+      setQueue(await operatorApi.listCases())
       if ('receipt' in response && response.receipt) setReceipt(response.receipt)
       setNotice(noticeForAction(operatorAction, response.case))
     } catch (caught) {
@@ -101,6 +103,7 @@ export default function App() {
     try {
       const response = await operatorApi.updateAccess(caseView.case.id, accessStatus)
       setCaseView(response.case)
+      setQueue(await operatorApi.listCases())
       setNotice(`Access recorded as ${accessStatus.replaceAll('_', ' ')}. Pal reran against the changed evidence: ${response.evidenceUpdate.result.replaceAll('_', ' ')}.`)
     } catch (caught) {
       setError(errorMessage(caught))
@@ -184,7 +187,7 @@ export default function App() {
         <div><p className="eyebrow">Exception queue</p><strong>{queue.length || 3} local scenarios</strong></div>
         <div className="case-queue__items">
           {queue.map((item) => <button key={item.id} type="button" className={item.id === caseView.case.id ? 'case-queue__item is-selected' : 'case-queue__item'} onClick={() => void loadWorkspace(item.id)} disabled={actionState === 'working'}>
-            <span>{item.title}</span><small>{item.priority}</small>
+            <span>{item.title}</span><small>{item.priority}</small><em>{item.state}</em>
           </button>)}
         </div>
       </nav>
@@ -229,7 +232,7 @@ export default function App() {
               <Unknowns item={caseView.summary.whatIsUnknown} />
             </DecisionStep>
             <DecisionStep kind="recommended" title={caseView.summary.phase === 'historical_decision' ? 'Prior recovery decision' : 'Recommended recovery'}>
-              <ProposalSummary proposal={caseView.proposal} phase={caseView.summary.phase} nextAction={caseView.nextAction.kind} timeZone={caseView.case.timeZone} />
+              <ProposalSummary proposal={caseView.proposal} phase={caseView.summary.phase} nextAction={caseView.nextAction.kind} timeZone={caseView.case.timeZone} contextEvidence={caseView.palRun?.includedEvidence ?? []} />
             </DecisionStep>
             <DecisionStep kind="authority" title="Your authority">
               <AuthoritySummary view={caseView} />
@@ -247,7 +250,7 @@ export default function App() {
             onHelp={() => void openHelp()}
           />
 
-          {notice ? <p className="notice" role="status">{notice}</p> : null}
+          {notice ? <p className={`notice${caseView.nextAction.kind === 'record_evidence' ? ' notice--hold' : ''}`} role="status">{notice}</p> : null}
           {error ? <p className="inline-error" role="alert">{error}</p> : null}
 
           {caseView.palRun ? <PalRunSummary run={caseView.palRun} /> : null}
@@ -276,9 +279,40 @@ function PalRunSummary({ run }: { readonly run: NonNullable<CaseOperatorView['pa
     <section className="pal-run" aria-labelledby="pal-run-title">
       <div><p className="eyebrow">Inspectable Pal run</p><h2 id="pal-run-title">What Pal used</h2></div>
       <p><strong>{run.skillCount} bounded skill calls.</strong> Outcome: {humanize(run.outcome)}. Reasoner: local deterministic; no model provider was contacted.</p>
-      <dl><div><dt>Included context</dt><dd>{run.includedEvidence.join(', ') || 'None'}</dd></div><div><dt>Omitted context</dt><dd>{run.omittedEvidence.join(', ') || 'None'}</dd></div><div><dt>Conflicts</dt><dd>{run.conflicts.join(', ') || 'None'}</dd></div></dl>
+      <dl>
+        <div><dt>Included context</dt><dd><ContextEvidenceList evidence={run.includedEvidence} empty="No context was included." /></dd></div>
+        <div><dt>Omitted context</dt><dd><ContextEvidenceList evidence={run.omittedEvidence} empty="No context was omitted." /></dd></div>
+        <div><dt>Conflicts</dt><dd>{run.conflicts.join(' ') || 'None'}</dd></div>
+      </dl>
     </section>
   )
+}
+
+function ContextEvidenceList({ evidence, empty }: {
+  readonly evidence: readonly OperatorContextEvidence[]
+  readonly empty: string
+}): ReactNode {
+  if (!evidence.length) return <span>{empty}</span>
+  return (
+    <ul className="context-evidence-list">
+      {evidence.map((item) => <li key={item.id}>
+        <strong>{item.label}</strong>
+        <span>{item.source} · {item.freshness}</span>
+        <small>{item.reason}</small>
+      </li>)}
+    </ul>
+  )
+}
+
+function proposalEvidence(contextEvidence: readonly OperatorContextEvidence[], evidenceIds: readonly string[]): readonly OperatorContextEvidence[] {
+  const included = new Map(contextEvidence.map((item) => [item.id, item]))
+  return [...new Set(evidenceIds)].map((id) => included.get(id) ?? {
+    id,
+    label: 'Cited case evidence',
+    source: 'Bound recovery record',
+    freshness: 'bound at preparation',
+    reason: 'This evidence supports a factual claim in the recovery proposal.',
+  })
 }
 
 function ActivityStream({
@@ -295,7 +329,7 @@ function ActivityStream({
           <p className="eyebrow">Live lifecycle</p>
           <h2 id="activity-title">Pal&apos;s work</h2>
         </div>
-        <p>Read-only events from the case and durable operation records.</p>
+        <p>Read-only case, Pal-run, and durable operation events.</p>
       </div>
       <ol className="activity-list">
         {activity.map((item) => (
@@ -383,11 +417,12 @@ function Unknowns({ item }: { readonly item: readonly string[] }): ReactNode {
     : <p className="empty-copy">Pal did not return an unresolved case fact.</p>
 }
 
-function ProposalSummary({ proposal, phase, nextAction, timeZone }: {
+function ProposalSummary({ proposal, phase, nextAction, timeZone, contextEvidence }: {
   readonly proposal: CaseOperatorView['proposal']
   readonly phase: CaseOperatorView['summary']['phase']
   readonly nextAction: CaseOperatorView['nextAction']['kind']
   readonly timeZone: string
+  readonly contextEvidence: readonly OperatorContextEvidence[]
 }): ReactNode {
   if (!proposal) {
     return <p className="empty-copy">{phase === 'historical_decision'
@@ -402,9 +437,7 @@ function ProposalSummary({ proposal, phase, nextAction, timeZone }: {
         <div><dt>Valid until</dt><dd>{formatCaseTime(proposal.validUntil, timeZone)}</dd></div>
       </dl>
       <p className="proposal-evidence-label">Evidence cited in this recovery</p>
-      <ul className="evidence-token-list">
-        {[...new Set(proposal.claims.flatMap((claim) => claim.evidenceIds))].map((evidenceId) => <li key={evidenceId}>{evidenceId}</li>)}
-      </ul>
+      <ContextEvidenceList evidence={proposalEvidence(contextEvidence, proposal.claims.flatMap((claim) => claim.evidenceIds))} empty="No evidence citation is available." />
     </div>
   )
 }
@@ -418,6 +451,9 @@ function historicalDecisionGuidance(action: CaseOperatorView['nextAction']['kind
 }
 
 function AuthoritySummary({ view }: { readonly view: CaseOperatorView }): ReactNode {
+  if (view.nextAction.kind === 'record_evidence') {
+    return <div className="authority-copy"><p>Pal cannot prepare recovery work while access is unresolved. Record current evidence; only a clear result can return an exact recovery for approval.</p></div>
+  }
   const action = nextOperatorAction(view)
   const binding = view.approval?.digest ?? view.proposal?.digest
   const message = authorityMessage(action, Boolean(view.operation))
@@ -439,6 +475,21 @@ function ActionPanel({ view, action, label, pending, onAction, onEvidence, onDec
   readonly onDecline: () => void
   readonly onHelp: () => void
 }): ReactNode {
+  if (view.nextAction.kind === 'record_evidence') {
+    const blocked = view.palRun?.outcome === 'hold_for_confirmation' && view.palRun.conflicts.length > 0
+    return (
+      <section className="action-panel action-panel--hold" aria-label="Access confirmation required">
+        <div>
+          <p className="eyebrow">Recovery paused</p>
+          <h3>{view.nextAction.label}</h3>
+          <p>{blocked
+            ? 'Pal found conflicting access records and did not prepare recovery work. Replace the field observation only when you have current evidence.'
+            : 'Pal did not prepare recovery work because current access is unconfirmed. Record a current observation before asking it to review again.'}</p>
+        </div>
+        <AccessEvidenceControls pending={pending} onEvidence={onEvidence} replace />
+      </section>
+    )
+  }
   if (!action || !label) {
     return (
       <section className="action-panel action-panel--complete" aria-label="Current case state">
@@ -468,9 +519,27 @@ function ActionPanel({ view, action, label, pending, onAction, onEvidence, onDec
       <button className="primary-button" type="button" disabled={pending} onClick={onAction}>
         {pending ? 'Working…' : label}
       </button>
-      {action === 'approve' ? <button className="secondary-button" type="button" disabled={pending} onClick={onDecline}>Do not approve</button> : null}
-      {action === 'prepare' ? <fieldset className="access-update" disabled={pending}><legend>Fresh access evidence</legend><p>Record one current observation and rerun Pal against it.</p><div><button type="button" onClick={() => onEvidence('confirmed_clear')}>Clear</button><button type="button" onClick={() => onEvidence('blocked')}>Blocked</button><button type="button" onClick={() => onEvidence('unknown')}>Unknown</button></div></fieldset> : null}
+      {action === 'approve' ? <button className="secondary-button" type="button" disabled={pending} onClick={onDecline}>Leave unapproved</button> : null}
+      {action === 'prepare' ? <AccessEvidenceControls pending={pending} onEvidence={onEvidence} /> : null}
     </section>
+  )
+}
+
+function AccessEvidenceControls({ pending, onEvidence, replace = false }: {
+  readonly pending: boolean
+  readonly onEvidence: (status: 'confirmed_clear' | 'blocked' | 'unknown') => void
+  readonly replace?: boolean
+}): ReactNode {
+  return (
+    <fieldset className="access-update" disabled={pending}>
+      <legend>{replace ? 'Replace the access observation' : 'Add a fresh access observation'}</legend>
+      <p>This records your observation and reruns Pal. It cannot create or send recovery work.</p>
+      <div>
+        <button type="button" onClick={() => onEvidence('confirmed_clear')}>Access is clear</button>
+        <button type="button" onClick={() => onEvidence('blocked')}>Driver reports blocked</button>
+        <button type="button" onClick={() => onEvidence('unknown')}>I cannot confirm access</button>
+      </div>
+    </fieldset>
   )
 }
 

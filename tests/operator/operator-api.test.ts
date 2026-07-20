@@ -236,7 +236,16 @@ describePostgres('local operator facade', () => {
     })
     expect(blocked.response.statusCode).toBe(200)
     expect(field(blocked.body, 'evidenceUpdate')).toMatchObject({ accessStatus: 'blocked', result: 'blocked_by_field_evidence' })
-    expect(field(blocked.body, 'case').proposal).toBeUndefined()
+    const blockedCase = field(blocked.body, 'case')
+    expect(blockedCase.proposal).toBeUndefined()
+    expect(field(blockedCase, 'nextAction')).toMatchObject({ kind: 'record_evidence', label: 'Resolve the access conflict' })
+    expect(blockedCase.activity).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'Fresh access observation recorded', status: 'complete' }),
+      expect.objectContaining({ label: 'Held for confirmation', status: 'current' }),
+    ]))
+    expect(field(blockedCase, 'palRun').includedEvidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: expect.any(String), source: expect.any(String), freshness: expect.any(String), reason: expect.any(String) }),
+    ]))
 
     const unknown = await request(value.app, cookie, {
       method: 'POST',
@@ -245,6 +254,13 @@ describePostgres('local operator facade', () => {
     })
     expect(unknown.response.statusCode).toBe(200)
     expect(field(unknown.body, 'evidenceUpdate')).toMatchObject({ accessStatus: 'unknown', result: 'needs_fresh_confirmation' })
+    expect(field(field(unknown.body, 'case'), 'nextAction')).toMatchObject({ kind: 'record_evidence', label: 'Confirm access before recovery' })
+
+    const refreshedQueue = await request(value.app, cookie, { method: 'GET', url: '/v1/operator/cases' })
+    expect(refreshedQueue.body.cases).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'case_riverbend-operator', state: 'held: blocked access' }),
+      expect.objectContaining({ id: 'case_northstar-operator', state: 'needs access confirmation' }),
+    ]))
 
     const clear = await request(value.app, cookie, {
       method: 'POST',

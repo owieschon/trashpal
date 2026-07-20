@@ -52,7 +52,7 @@ const historicalDecisionWhatHappened = 'A recovery was prepared for this excepti
 const OperatorEvidenceSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
-  status: z.enum(['confirmed', 'observed', 'pending']),
+  status: z.enum(['confirmed', 'observed', 'pending', 'blocked', 'unknown']),
   detail: z.string().min(1),
 }).strict()
 
@@ -84,7 +84,7 @@ const OperatorOperationSchema = z.object({
 }).strict()
 
 const OperatorNextActionSchema = z.object({
-  kind: z.enum(['prepare', 'approve', 'reserve', 'dispatch', 'reconcile', 'view_receipt', 'monitor']),
+  kind: z.enum(['prepare', 'record_evidence', 'approve', 'reserve', 'dispatch', 'reconcile', 'view_receipt', 'monitor']),
   label: z.string().min(1),
   requiresApproval: z.boolean(),
 }).strict()
@@ -101,8 +101,20 @@ const OperatorPalRunSchema = z.object({
   outcome: z.enum(['prepare_recovery', 'hold_for_confirmation', 'escalate']),
   stopCode: z.enum(['proposal_validated', 'human_confirmation_required', 'safe_recovery_not_prepared']),
   skillCount: z.number().int().nonnegative(),
-  includedEvidence: z.array(z.string().min(1)),
-  omittedEvidence: z.array(z.string().min(1)),
+  includedEvidence: z.array(z.object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    source: z.string().min(1),
+    freshness: z.string().min(1),
+    reason: z.string().min(1),
+  }).strict()),
+  omittedEvidence: z.array(z.object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    source: z.string().min(1),
+    freshness: z.string().min(1),
+    reason: z.string().min(1),
+  }).strict()),
   conflicts: z.array(z.string().min(1)),
   reasoner: z.literal('deterministic_local'),
 }).strict()
@@ -299,12 +311,16 @@ export function createTrashPalOperatorApi(options: CreateTrashPalOperatorApiOpti
 
   app.get('/v1/operator/cases/:caseId', async (request) => {
     const session = resolveOperatorSession(request, sessions)
-    return { case: await operatorCaseView(runtime, session, pathParam(request, 'caseId')) }
+    return { case: await operatorCaseView(runtime, sessions, session, pathParam(request, 'caseId')) }
   })
 
   app.get('/v1/operator/cases', async (request) => {
-    resolveOperatorSession(request, sessions)
-    return { cases: Object.entries(operatorCases).map(([id, metadata]) => ({ id, ...metadata })) }
+    const session = resolveOperatorSession(request, sessions)
+    return { cases: await Promise.all(Object.entries(operatorCases).map(async ([id, metadata]) => {
+      const caseId = OperatorCaseIdSchema.parse(id)
+      const state = await runtime.getCaseLifecycleState(session.userSession, caseId)
+      return { id: caseId, ...metadata, state: queueState(state, sessions.accessStatus(session.id, caseId)) }
+    })) }
   })
 
   app.post('/v1/operator/cases/:caseId/prepare', async (request) => {
@@ -326,7 +342,7 @@ export function createTrashPalOperatorApi(options: CreateTrashPalOperatorApiOpti
       throw new LifecycleError('operator_preparation_not_ready', 'Pal did not prepare an executable recovery.')
     }
     return {
-      case: await operatorCaseView(runtime, session, caseId),
+      case: await operatorCaseView(runtime, sessions, session, caseId),
       preparation: { proposalId: prepared.proposal.id, outcome: 'prepare_recovery' as const },
     }
   })
@@ -344,7 +360,7 @@ export function createTrashPalOperatorApi(options: CreateTrashPalOperatorApiOpti
     sessions.setAccessStatus(session.id, caseId, body.data.accessStatus)
     const prepared = await runtime.pal.prepare({ tenantId: session.principal.tenantId, caseId, operatorAccessStatus: body.data.accessStatus })
     return {
-      case: await operatorCaseView(runtime, session, caseId),
+      case: await operatorCaseView(runtime, sessions, session, caseId),
       evidenceUpdate: {
         accessStatus: body.data.accessStatus,
         outcome: prepared.trace.outcome,
@@ -364,7 +380,7 @@ export function createTrashPalOperatorApi(options: CreateTrashPalOperatorApiOpti
     const approval = await runtime.repository.approve(session.userSession, proposal.id)
     const reservation = await runtime.repository.reserve(session.userSession, approval.digest)
     return {
-      case: await operatorCaseView(runtime, session, proposal.caseId),
+      case: await operatorCaseView(runtime, sessions, session, proposal.caseId),
       approval: {
         digest: approval.digest,
         proposalDigest: approval.proposalDigest,
@@ -384,7 +400,7 @@ export function createTrashPalOperatorApi(options: CreateTrashPalOperatorApiOpti
     }
     const reservation = await runtime.repository.reserve(session.userSession, current.approval.digest)
     return {
-      case: await operatorCaseView(runtime, session, GreenleafOperatorCaseId),
+      case: await operatorCaseView(runtime, sessions, session, GreenleafOperatorCaseId),
       operation: safeOperation(reservation.operation),
       replayed: reservation.replayed,
     }
@@ -397,7 +413,7 @@ export function createTrashPalOperatorApi(options: CreateTrashPalOperatorApiOpti
     const existing = await assertOperatorOperation(runtime, session, operationId)
     const operation = await runtime.dispatchOperation(runtime.workers.dispatch, operationId)
     return {
-      case: await operatorCaseView(runtime, session, existing.snapshot.caseId),
+      case: await operatorCaseView(runtime, sessions, session, existing.snapshot.caseId),
       operation: safeOperation(operation),
     }
   })
@@ -410,7 +426,7 @@ export function createTrashPalOperatorApi(options: CreateTrashPalOperatorApiOpti
     const operation = await runtime.reconcile(runtime.workers.dispatch, operationId)
     const receipt = await runtime.repository.receipt(session.userSession, operationId)
     return {
-      case: await operatorCaseView(runtime, session, existing.snapshot.caseId),
+      case: await operatorCaseView(runtime, sessions, session, existing.snapshot.caseId),
       operation: safeOperation(operation),
       receipt: safeReceipt(receipt, operation),
     }
@@ -421,7 +437,7 @@ export function createTrashPalOperatorApi(options: CreateTrashPalOperatorApiOpti
     const operationId = pathParam(request, 'operationId')
     const operation = await assertOperatorOperation(runtime, session, operationId)
     return {
-      case: await operatorCaseView(runtime, session, operation.snapshot.caseId),
+      case: await operatorCaseView(runtime, sessions, session, operation.snapshot.caseId),
       receipt: safeReceipt(await runtime.repository.receipt(session.userSession, operationId), operation),
     }
   })
@@ -431,12 +447,13 @@ export function createTrashPalOperatorApi(options: CreateTrashPalOperatorApiOpti
 
 type OperatorSession = Readonly<{ id: string; userSession: string; principal: Principal; sourceSnapshotAt: Date }>
 
-async function operatorCaseView(runtime: ComposedRuntime, session: OperatorSession, caseId: string): Promise<CaseOperatorView> {
+async function operatorCaseView(runtime: ComposedRuntime, sessions: LocalDemoSessionStore, session: OperatorSession, caseId: string): Promise<CaseOperatorView> {
   assertOperatorScope(session.principal, caseId)
   const metadata = operatorCases[OperatorCaseIdSchema.parse(caseId)]
   const state = await runtime.getCaseLifecycleState(session.userSession, caseId)
   const proposal = state.proposal ? safeProposalFromBinding(state.proposal) : undefined
   const palRun = runtime.pal.getLatestRun({ tenantId: session.principal.tenantId, caseId })
+  const accessStatus = sessions.accessStatus(session.id, caseId)
   const historicalOperation = !proposal && state.operation !== undefined
   const serviceWindowEndsAt = state.serviceDeadline ?? createSyntheticRecordedRecoveryCase({
     tenantId: session.principal.tenantId,
@@ -465,7 +482,9 @@ async function operatorCaseView(runtime: ComposedRuntime, session: OperatorSessi
         ],
         whatIsUnknown: ['Whether the provider-side recovery reached a final outcome.'],
       }
-      : {
+      : palRun && accessStatus
+        ? heldCaseSummary(accessStatus)
+        : {
         phase: 'source_records_available' as const,
         whatHappened: sourceRecordsWhatHappened,
         whatPalChecked: ['Pal has not prepared a recovery yet.'],
@@ -485,7 +504,9 @@ async function operatorCaseView(runtime: ComposedRuntime, session: OperatorSessi
         { id: 'field_attempt', label: 'Field attempt', status: 'observed' as const, detail: 'The scheduled collection could not be completed.' },
         { id: 'completion_proof', label: 'Completion proof', status: 'pending' as const, detail: 'The existing provider operation has not yet established a final outcome.' },
       ]
-      : [
+      : accessStatus
+        ? heldCaseEvidence(accessStatus)
+        : [
         { id: 'agreement', label: 'Service agreement record', status: 'observed' as const, detail: 'A source record is available for Pal to evaluate.' },
         { id: 'access', label: 'Access confirmation record', status: 'observed' as const, detail: 'A source record is available for Pal to evaluate.' },
         { id: 'field_attempt', label: 'Field attempt record', status: 'observed' as const, detail: 'A source record is available for Pal to evaluate.' },
@@ -502,13 +523,13 @@ async function operatorCaseView(runtime: ComposedRuntime, session: OperatorSessi
     },
     summary,
     evidence,
-    activity: operatorActivity(state, session.sourceSnapshotAt),
+    activity: operatorActivity(state, session.sourceSnapshotAt, palRun, accessStatus),
     ...(palRun ? { palRun: {
       outcome: palRun.trace.outcome,
       stopCode: palRun.trace.stopCode,
       skillCount: palRun.trace.skillInvocations.length,
-      includedEvidence: palRun.contextEnvelope.includedEvidence.map((item) => item.evidenceId),
-      omittedEvidence: palRun.contextEnvelope.omittedEvidence.map((item) => item.evidenceId),
+      includedEvidence: palRun.contextEnvelope.includedEvidence.map(operatorContextEvidence),
+      omittedEvidence: palRun.contextEnvelope.omittedEvidence.map(operatorContextEvidence),
       conflicts: palRun.contextEnvelope.conflicts.map((item) => item.reason),
       reasoner: 'deterministic_local' as const,
     } } : {}),
@@ -530,14 +551,74 @@ async function operatorCaseView(runtime: ComposedRuntime, session: OperatorSessi
     } : {}),
     ...(state.operation ? { operation: safeOperation(state.operation) } : {}),
     receiptAvailable: state.receiptAvailable,
-    nextAction: nextAction(state),
+    nextAction: nextAction(state, accessStatus),
   }
   return CaseOperatorViewSchema.parse(view)
+}
+
+function heldCaseSummary(accessStatus: OperatorAccessStatus) {
+  if (accessStatus === 'blocked') {
+    return {
+      phase: 'source_records_available' as const,
+      whatHappened: sourceRecordsWhatHappened,
+      whatPalChecked: ['Pal compared the fresh field observation with the existing access record.'],
+      whatIsUnknown: ['The field report says access is blocked while the existing access record says it is clear.'],
+    }
+  }
+  return {
+    phase: 'source_records_available' as const,
+    whatHappened: sourceRecordsWhatHappened,
+    whatPalChecked: ['Pal checked the available access records after the dispatcher could not confirm entry.'],
+    whatIsUnknown: ['A current, authoritative access confirmation is still required before recovery can be prepared.'],
+  }
+}
+
+function heldCaseEvidence(accessStatus: OperatorAccessStatus): z.output<typeof OperatorEvidenceSchema>[] {
+  const observation = accessStatus === 'blocked'
+    ? { id: 'fresh_field_access', label: 'Fresh field access observation', status: 'blocked' as const, detail: 'Dispatcher-recorded field evidence says access is blocked now. It conflicts with the prior clear record.' }
+    : { id: 'fresh_field_access', label: 'Fresh field access observation', status: 'unknown' as const, detail: 'The dispatcher could not confirm access. A current authoritative confirmation is still required.' }
+  return [
+    { id: 'agreement', label: 'Service agreement record', status: 'observed' as const, detail: 'An agreement record is available for Pal to evaluate.' },
+    { id: 'access', label: 'Prior access confirmation', status: 'observed' as const, detail: 'The earlier record said access was clear; it is not enough to override the fresh field observation.' },
+    observation,
+    { id: 'completion_proof', label: 'Completion proof', status: 'pending' as const, detail: 'No recovery has been prepared or dispatched.' },
+  ]
+}
+
+function operatorContextEvidence(item: { readonly evidenceId: string; readonly reason: string; readonly authority?: string; readonly freshness?: string }) {
+  return {
+    id: item.evidenceId,
+    label: contextEvidenceLabel(item.evidenceId),
+    source: contextEvidenceSource(item.authority),
+    freshness: item.freshness ?? 'not applicable',
+    reason: item.reason,
+  }
+}
+
+function contextEvidenceLabel(evidenceId: string): string {
+  if (evidenceId.startsWith('ev_case-')) return 'Service exception'
+  if (evidenceId.startsWith('ev_agreement-')) return 'Active service agreement'
+  if (evidenceId.startsWith('ev_access-')) return 'Access confirmation'
+  if (evidenceId.startsWith('ev_attempt-')) return 'Field attempt'
+  if (evidenceId.startsWith('ev_history-')) return 'Historical case note'
+  if (evidenceId.startsWith('ev_policy-')) return 'Recovery policy'
+  if (evidenceId.startsWith('ev_route-')) return 'Recovery route quote'
+  return 'Case evidence'
+}
+
+function contextEvidenceSource(authority: string | undefined): string {
+  if (authority === 'agreement') return 'Service agreement record'
+  if (authority === 'field_operation') return 'Field service record'
+  if (authority === 'customer_report') return 'Customer access record'
+  if (authority === 'derived') return 'Deterministic policy or route calculation'
+  return 'Case-scoped source record'
 }
 
 function operatorActivity(
   state: Awaited<ReturnType<ComposedRuntime['getCaseLifecycleState']>>,
   sourceSnapshotAt: Date,
+  palRun: ReturnType<ComposedRuntime['pal']['getLatestRun']>,
+  accessStatus: OperatorAccessStatus | undefined,
 ): z.output<typeof OperatorActivitySchema>[] {
   const activity: z.output<typeof OperatorActivitySchema>[] = [{
     id: 'signal',
@@ -565,6 +646,26 @@ function operatorActivity(
         label: 'Proposal built',
         detail: 'Pal bound one recovery work order to the evidence snapshot.',
         status: state.approval ? 'complete' : 'current',
+      },
+    )
+  }
+  if (!state.proposal && palRun && accessStatus) {
+    activity.push(
+      {
+        id: 'access-observation',
+        label: 'Fresh access observation recorded',
+        detail: accessStatus === 'blocked'
+          ? 'The dispatcher recorded that access is blocked at the service location.'
+          : 'The dispatcher recorded that access could not be confirmed.',
+        status: 'complete',
+      },
+      {
+        id: 'pal-hold',
+        label: 'Held for confirmation',
+        detail: accessStatus === 'blocked'
+          ? 'Pal found conflicting access evidence and did not prepare a recovery.'
+          : 'Pal requires a current authoritative access confirmation before preparing a recovery.',
+        status: 'current',
       },
     )
   }
@@ -610,17 +711,27 @@ function operationActivityDetail(state: OperationState): string {
   return `The durable operation advanced to ${state.replaceAll('_', ' ')}.`
 }
 
-function nextAction(state: Awaited<ReturnType<ComposedRuntime['getCaseLifecycleState']>>): CaseOperatorView['nextAction'] {
+function nextAction(state: Awaited<ReturnType<ComposedRuntime['getCaseLifecycleState']>>, accessStatus?: OperatorAccessStatus): CaseOperatorView['nextAction'] {
   if (state.operation?.state === 'reserved') return { kind: 'dispatch', label: 'Dispatch the approved recovery', requiresApproval: false }
   if (state.operation?.state === 'unknown') return { kind: 'reconcile', label: 'Reconcile the provider outcome', requiresApproval: false }
   if (state.operation) {
     if (!state.receiptAvailable) return { kind: 'view_receipt', label: 'Create and inspect the operation receipt', requiresApproval: false }
     return { kind: 'monitor', label: 'Monitor the recovery outcome', requiresApproval: false }
   }
+  if (!state.proposal && accessStatus === 'blocked') return { kind: 'record_evidence', label: 'Resolve the access conflict', requiresApproval: false }
+  if (!state.proposal && accessStatus === 'unknown') return { kind: 'record_evidence', label: 'Confirm access before recovery', requiresApproval: false }
   if (!state.proposal) return { kind: 'prepare', label: 'Ask Pal to prepare a recovery', requiresApproval: false }
   if (!state.approval) return { kind: 'approve', label: 'Review and approve this exact recovery', requiresApproval: true }
   if (!state.operation) return { kind: 'reserve', label: 'Create the approved recovery operation', requiresApproval: false }
   throw new LifecycleError('operator_state_invalid', 'The operator state could not determine a next action.')
+}
+
+function queueState(state: Awaited<ReturnType<ComposedRuntime['getCaseLifecycleState']>>, accessStatus?: OperatorAccessStatus): string {
+  if (state.operation) return state.receiptAvailable ? 'outcome recorded' : 'operation in progress'
+  if (state.proposal && !state.approval) return 'ready for approval'
+  if (accessStatus === 'blocked') return 'held: blocked access'
+  if (accessStatus === 'unknown') return 'needs access confirmation'
+  return 'needs review'
 }
 
 function operationNeedsResolution(state: OperationState): boolean {
