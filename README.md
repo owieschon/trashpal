@@ -1,8 +1,14 @@
 # TrashPal
 
-TrashPal is a local operator workspace for reviewing one service exception, approving an exact recovery, and reconciling an uncertain dispatch before retrying it.
+TrashPal is a local operator workspace for reviewing one commercial organics collection exception, approving an exact recovery, and reconciling an uncertain dispatch before retrying it.
 
 TrashPal is an independent fictional project, not an official PostHog product. It was distilled from [self-driving-trash-palace](https://github.com/owieschon/self-driving-trash-palace), the full build, including how it was built and what it does not prove.
+
+## Why this exists
+
+TrashPal began as a demonstration for a friend who works at a local company that helps turn residential and commercial food scraps into compost and soil. I wanted to make one claim concrete: agents can help with physical operations outside conventional software workflows when context, authority, uncertainty, and recovery are designed into the product.
+
+The company did not sponsor, test, or endorse TrashPal. The missed-collection workflow and all repository data are fictional; they are a design exercise, not a representation of that company's operations.
 
 ## Run the local demo
 
