@@ -18,6 +18,7 @@ const operatorCases = {
 } as const
 const OperatorCaseIdSchema = z.enum([GreenleafOperatorCaseId, 'case_riverbend-operator', 'case_northstar-operator'])
 const OperatorAccessStatusSchema = z.enum(['confirmed_clear', 'blocked', 'unknown'])
+const OperatorEvidenceNoteSchema = z.string().trim().min(1).max(280)
 
 const demoCookieName = 'tp_demo_session'
 const localSessionTtlSeconds = 60 * 60
@@ -119,6 +120,13 @@ const OperatorPalRunSchema = z.object({
   reasoner: z.literal('deterministic_local'),
 }).strict()
 
+const OperatorDecisionTraceSchema = z.object({
+  facts: z.array(z.string().min(1)).min(1).max(4),
+  constraint: z.string().min(1),
+  recommendedAction: z.string().min(1),
+  rejectedAlternatives: z.array(z.string().min(1)).min(1).max(3),
+}).strict()
+
 /**
  * The browser-facing case shape. It is a typed presentation projection, not a
  * serialized CRM record, model context, execution snapshot, or worker trace.
@@ -141,6 +149,7 @@ export const CaseOperatorViewSchema = z.object({
   evidence: z.array(OperatorEvidenceSchema).length(4),
   activity: z.array(OperatorActivitySchema).min(1),
   palRun: OperatorPalRunSchema.optional(),
+  decisionTrace: OperatorDecisionTraceSchema,
   proposal: OperatorProposalSchema.optional(),
   approval: z.object({
     digest: z.string().regex(/^[a-f0-9]{64}$/),
@@ -199,6 +208,7 @@ export class LocalDemoSessionStore {
   readonly #defaultDispatcherSession: string
   readonly #sessions = new Map<string, StoredLocalDemoSession>()
   readonly #accessUpdates = new Map<string, OperatorAccessStatus>()
+  readonly #accessNotes = new Map<string, string>()
 
   constructor(input: Readonly<{ authority: ComposedRuntime['authority']; dispatcherSession: string }>) {
     this.#authority = input.authority
@@ -235,12 +245,19 @@ export class LocalDemoSessionStore {
     return { id: cookieValue, userSession: stored.userSession, principal, sourceSnapshotAt: new Date(stored.sourceSnapshotAt) }
   }
 
-  setAccessStatus(sessionId: string, caseId: string, status: OperatorAccessStatus): void {
-    this.#accessUpdates.set(`${sessionId}:${caseId}`, status)
+  setAccessObservation(sessionId: string, caseId: string, status: OperatorAccessStatus, note?: string): void {
+    const key = `${sessionId}:${caseId}`
+    this.#accessUpdates.set(key, status)
+    if (note) this.#accessNotes.set(key, note)
+    else this.#accessNotes.delete(key)
   }
 
   accessStatus(sessionId: string, caseId: string): OperatorAccessStatus | undefined {
     return this.#accessUpdates.get(`${sessionId}:${caseId}`)
+  }
+
+  accessNote(sessionId: string, caseId: string): string | undefined {
+    return this.#accessNotes.get(`${sessionId}:${caseId}`)
   }
 
   #assertDispatcher(userSession: string): Principal {
@@ -351,18 +368,19 @@ export function createTrashPalOperatorApi(options: CreateTrashPalOperatorApiOpti
     const session = resolveOperatorSession(request, sessions)
     const caseId = pathParam(request, 'caseId')
     assertOperatorScope(session.principal, caseId)
-    const body = z.object({ accessStatus: OperatorAccessStatusSchema }).strict().safeParse(request.body)
+    const body = z.object({ accessStatus: OperatorAccessStatusSchema, note: OperatorEvidenceNoteSchema.optional() }).strict().safeParse(request.body)
     if (!body.success) throw new LifecycleError('operator_evidence_invalid', 'Choose clear, blocked, or unknown access evidence.')
     const current = await runtime.getCaseLifecycleState(session.userSession, caseId)
     if (current.operation && operationNeedsResolution(current.operation.state)) {
       throw new LifecycleError('operator_operation_unresolved', 'Resolve the existing operation before recording new access evidence.')
     }
-    sessions.setAccessStatus(session.id, caseId, body.data.accessStatus)
+    sessions.setAccessObservation(session.id, caseId, body.data.accessStatus, body.data.note)
     const prepared = await runtime.pal.prepare({ tenantId: session.principal.tenantId, caseId, operatorAccessStatus: body.data.accessStatus })
     return {
       case: await operatorCaseView(runtime, sessions, session, caseId),
       evidenceUpdate: {
         accessStatus: body.data.accessStatus,
+        ...(body.data.note ? { note: body.data.note } : {}),
         outcome: prepared.trace.outcome,
         result: body.data.accessStatus === 'confirmed_clear'
           ? 'ready_for_review'
@@ -454,6 +472,7 @@ async function operatorCaseView(runtime: ComposedRuntime, sessions: LocalDemoSes
   const proposal = state.proposal ? safeProposalFromBinding(state.proposal) : undefined
   const palRun = runtime.pal.getLatestRun({ tenantId: session.principal.tenantId, caseId })
   const accessStatus = sessions.accessStatus(session.id, caseId)
+  const accessNote = sessions.accessNote(session.id, caseId)
   const historicalOperation = !proposal && state.operation !== undefined
   const serviceWindowEndsAt = state.serviceDeadline ?? createSyntheticRecordedRecoveryCase({
     tenantId: session.principal.tenantId,
@@ -505,7 +524,7 @@ async function operatorCaseView(runtime: ComposedRuntime, sessions: LocalDemoSes
         { id: 'completion_proof', label: 'Completion proof', status: 'pending' as const, detail: 'The existing provider operation has not yet established a final outcome.' },
       ]
       : accessStatus
-        ? heldCaseEvidence(accessStatus)
+        ? heldCaseEvidence(accessStatus, accessNote)
         : [
         { id: 'agreement', label: 'Service agreement record', status: 'observed' as const, detail: 'A source record is available for Pal to evaluate.' },
         { id: 'access', label: 'Access confirmation record', status: 'observed' as const, detail: 'A source record is available for Pal to evaluate.' },
@@ -523,6 +542,7 @@ async function operatorCaseView(runtime: ComposedRuntime, sessions: LocalDemoSes
     },
     summary,
     evidence,
+    decisionTrace: operatorDecisionTrace({ proposal: Boolean(proposal), historicalOperation, ...(accessStatus ? { accessStatus } : {}), nextAction: nextAction(state, accessStatus).kind }),
     activity: operatorActivity(state, session.sourceSnapshotAt, palRun, accessStatus),
     ...(palRun ? { palRun: {
       outcome: palRun.trace.outcome,
@@ -573,16 +593,62 @@ function heldCaseSummary(accessStatus: OperatorAccessStatus) {
   }
 }
 
-function heldCaseEvidence(accessStatus: OperatorAccessStatus): z.output<typeof OperatorEvidenceSchema>[] {
+function heldCaseEvidence(accessStatus: OperatorAccessStatus, note?: string): z.output<typeof OperatorEvidenceSchema>[] {
   const observation = accessStatus === 'blocked'
-    ? { id: 'fresh_field_access', label: 'Fresh field access observation', status: 'blocked' as const, detail: 'Dispatcher-recorded field evidence says access is blocked now. It conflicts with the prior clear record.' }
-    : { id: 'fresh_field_access', label: 'Fresh field access observation', status: 'unknown' as const, detail: 'The dispatcher could not confirm access. A current authoritative confirmation is still required.' }
+    ? { id: 'fresh_field_access', label: 'Fresh field access observation', status: 'blocked' as const, detail: `Dispatcher-recorded field evidence says access is blocked now. It conflicts with the prior clear record.${note ? ' Operator note is recorded for review; Pal did not evaluate it.' : ''}` }
+    : { id: 'fresh_field_access', label: 'Fresh field access observation', status: 'unknown' as const, detail: `The dispatcher could not confirm access. A current authoritative confirmation is still required.${note ? ' Operator note is recorded for review; Pal did not evaluate it.' : ''}` }
   return [
     { id: 'agreement', label: 'Service agreement record', status: 'observed' as const, detail: 'An agreement record is available for Pal to evaluate.' },
     { id: 'access', label: 'Prior access confirmation', status: 'observed' as const, detail: 'The earlier record said access was clear; it is not enough to override the fresh field observation.' },
     observation,
     { id: 'completion_proof', label: 'Completion proof', status: 'pending' as const, detail: 'No recovery has been prepared or dispatched.' },
   ]
+}
+
+function operatorDecisionTrace(input: Readonly<{
+  proposal: boolean
+  historicalOperation: boolean
+  accessStatus?: OperatorAccessStatus
+  nextAction: z.output<typeof OperatorNextActionSchema>['kind']
+}>): z.output<typeof OperatorDecisionTraceSchema> {
+  if (input.historicalOperation) {
+    return {
+      facts: ['A prior recovery operation already exists.', 'The prior proposal is expired and cannot be reused.'],
+      constraint: 'The durable operation is the only authorized record for this exception.',
+      recommendedAction: input.nextAction === 'reconcile' ? 'Reconcile the existing operation.' : 'Follow the existing operation record.',
+      rejectedAlternatives: ['Prepare a second recovery.', 'Reuse the expired proposal.'],
+    }
+  }
+  if (input.proposal) {
+    return {
+      facts: ['The service agreement permits recovery.', 'Access is confirmed for the recovery window.', 'A vehicle has capacity for one recovery stop.'],
+      constraint: 'The proposal is bound to a specific evidence snapshot and still needs dispatcher approval.',
+      recommendedAction: 'Approve the exact recovery, or leave it unapproved.',
+      rejectedAlternatives: ['Send a vehicle before approval.', 'Change the work order without a fresh Pal run.'],
+    }
+  }
+  if (input.accessStatus === 'blocked') {
+    return {
+      facts: ['The prior access record says entry was clear.', 'The fresh field observation says access is blocked.'],
+      constraint: 'Fresh conflicting field evidence prevents Pal from preparing recovery work.',
+      recommendedAction: 'Hold the case and obtain a current access confirmation.',
+      rejectedAlternatives: ['Prepare recovery from the stale clear record.', 'Dispatch a vehicle into a known access conflict.'],
+    }
+  }
+  if (input.accessStatus === 'unknown') {
+    return {
+      facts: ['The existing access record is not a current confirmation.', 'The dispatcher could not confirm entry.'],
+      constraint: 'Pal requires a current authoritative access confirmation before it can prepare recovery.',
+      recommendedAction: 'Hold the case until access is confirmed.',
+      rejectedAlternatives: ['Treat an unconfirmed observation as clear.', 'Prepare or dispatch recovery without current access evidence.'],
+    }
+  }
+  return {
+    facts: ['A missed collection is recorded.', 'Case-scoped source records are available for review.'],
+    constraint: 'No recovery has been prepared or approved.',
+    recommendedAction: 'Record a current access observation or ask Pal to prepare a recovery.',
+    rejectedAlternatives: ['Dispatch without an approved recovery.', 'Assume the original collection was completed.'],
+  }
 }
 
 function operatorContextEvidence(item: { readonly evidenceId: string; readonly reason: string; readonly authority?: string; readonly freshness?: string }) {

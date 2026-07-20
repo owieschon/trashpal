@@ -96,15 +96,15 @@ export default function App() {
     }
   }
 
-  const updateAccess = async (accessStatus: 'confirmed_clear' | 'blocked' | 'unknown') => {
+  const updateAccess = async (observation: Readonly<{ accessStatus: 'confirmed_clear' | 'blocked' | 'unknown'; note?: string }>) => {
     if (!caseView) return
     setActionState('working')
     setError(null)
     try {
-      const response = await operatorApi.updateAccess(caseView.case.id, accessStatus)
+      const response = await operatorApi.updateAccess(caseView.case.id, observation)
       setCaseView(response.case)
       setQueue(await operatorApi.listCases())
-      setNotice(`Access recorded as ${accessStatus.replaceAll('_', ' ')}. Pal reran against the changed evidence: ${response.evidenceUpdate.result.replaceAll('_', ' ')}.`)
+      setNotice(`Access recorded as ${observation.accessStatus.replaceAll('_', ' ')}. Pal reran against the changed evidence: ${response.evidenceUpdate.result.replaceAll('_', ' ')}.`)
     } catch (caught) {
       setError(errorMessage(caught))
     } finally {
@@ -239,13 +239,15 @@ export default function App() {
             </DecisionStep>
           </ol>
 
+          <DecisionTrace trace={caseView.decisionTrace} />
+
           <ActionPanel
             view={caseView}
             action={operatorAction}
             label={actionLabel}
             pending={actionState === 'working'}
             onAction={() => void runAction()}
-            onEvidence={(status) => void updateAccess(status)}
+            onEvidence={(observation) => void updateAccess(observation)}
             onDecline={() => setNotice('Recovery left unapproved. No dispatch operation was created; keep the case open or record fresh evidence before rerunning Pal.')}
             onHelp={() => void openHelp()}
           />
@@ -465,13 +467,31 @@ function AuthoritySummary({ view }: { readonly view: CaseOperatorView }): ReactN
   )
 }
 
+function DecisionTrace({ trace }: { readonly trace: CaseOperatorView['decisionTrace'] }): ReactNode {
+  return (
+    <section className="decision-trace" aria-labelledby="decision-trace-title">
+      <div>
+        <p className="eyebrow">Bounded decision trace</p>
+        <h2 id="decision-trace-title">Why this path</h2>
+      </div>
+      <p className="decision-trace__intro">Case facts and policy constraints selected this path. This is a server-derived explanation, not hidden reasoning.</p>
+      <dl>
+        <div><dt>Facts used</dt><dd><ul>{trace.facts.map((fact) => <li key={fact}>{fact}</li>)}</ul></dd></div>
+        <div><dt>Constraint</dt><dd>{trace.constraint}</dd></div>
+        <div><dt>Selected path</dt><dd>{trace.recommendedAction}</dd></div>
+        <div><dt>Not selected</dt><dd><ul>{trace.rejectedAlternatives.map((alternative) => <li key={alternative}>{alternative}</li>)}</ul></dd></div>
+      </dl>
+    </section>
+  )
+}
+
 function ActionPanel({ view, action, label, pending, onAction, onEvidence, onDecline, onHelp }: {
   readonly view: CaseOperatorView
   readonly action: ReturnType<typeof nextOperatorAction>
   readonly label: string | null
   readonly pending: boolean
   readonly onAction: () => void
-  readonly onEvidence: (status: 'confirmed_clear' | 'blocked' | 'unknown') => void
+  readonly onEvidence: (observation: Readonly<{ accessStatus: 'confirmed_clear' | 'blocked' | 'unknown'; note?: string }>) => void
   readonly onDecline: () => void
   readonly onHelp: () => void
 }): ReactNode {
@@ -527,19 +547,28 @@ function ActionPanel({ view, action, label, pending, onAction, onEvidence, onDec
 
 function AccessEvidenceControls({ pending, onEvidence, replace = false }: {
   readonly pending: boolean
-  readonly onEvidence: (status: 'confirmed_clear' | 'blocked' | 'unknown') => void
+  readonly onEvidence: (observation: Readonly<{ accessStatus: 'confirmed_clear' | 'blocked' | 'unknown'; note?: string }>) => void
   readonly replace?: boolean
 }): ReactNode {
+  const [accessStatus, setAccessStatus] = useState<'confirmed_clear' | 'blocked' | 'unknown'>('unknown')
+  const [note, setNote] = useState('')
   return (
-    <fieldset className="access-update" disabled={pending}>
-      <legend>{replace ? 'Replace the access observation' : 'Add a fresh access observation'}</legend>
-      <p>This records your observation and reruns Pal. It cannot create or send recovery work.</p>
-      <div>
-        <button type="button" onClick={() => onEvidence('confirmed_clear')}>Access is clear</button>
-        <button type="button" onClick={() => onEvidence('blocked')}>Driver reports blocked</button>
-        <button type="button" onClick={() => onEvidence('unknown')}>I cannot confirm access</button>
-      </div>
-    </fieldset>
+    <form className="access-update" onSubmit={(event) => {
+      event.preventDefault()
+      onEvidence({ accessStatus, ...(note.trim() ? { note: note.trim() } : {}) })
+    }}>
+      <fieldset disabled={pending}>
+        <legend>{replace ? 'Replace the access observation' : 'Record a fresh access observation'}</legend>
+        <p>Pal uses the selected access status. Your optional note is retained for the reviewer and is not sent to Pal.</p>
+        <div className="access-update__choices">
+          <label><input type="radio" name="access-status" value="confirmed_clear" checked={accessStatus === 'confirmed_clear'} onChange={() => setAccessStatus('confirmed_clear')} /> Access is clear</label>
+          <label><input type="radio" name="access-status" value="blocked" checked={accessStatus === 'blocked'} onChange={() => setAccessStatus('blocked')} /> Access is blocked</label>
+          <label><input type="radio" name="access-status" value="unknown" checked={accessStatus === 'unknown'} onChange={() => setAccessStatus('unknown')} /> I cannot confirm access</label>
+        </div>
+        <label className="access-update__note">Operator note <span>optional</span><textarea value={note} maxLength={280} rows={2} placeholder="What did you observe?" onChange={(event) => setNote(event.target.value)} /></label>
+        <button className="secondary-button" type="submit">{pending ? 'Rerunning Pal…' : 'Record observation and rerun Pal'}</button>
+      </fieldset>
+    </form>
   )
 }
 

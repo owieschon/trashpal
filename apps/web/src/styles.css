@@ -101,12 +101,19 @@ a { color: inherit; }
 .context-evidence-list span { color: #58636d; font-size: 11px; }
 .context-evidence-list small { color: #58636d; font-size: 11px; line-height: 1.35; }
 
-.access-update { grid-column: 1 / -1; margin: 0; padding: 12px 0 0; border: 0; border-top: 1px solid #c7d0d2; }
+.access-update { grid-column: 1 / -1; margin: 0; padding: 16px 0 0; border: 0; border-top: 1px solid #c7d0d2; }
+.access-update fieldset { display: grid; gap: 12px; margin: 0; padding: 0; border: 0; }
 .access-update legend { padding: 0; font-size: 13px; font-weight: 750; }
-.access-update p { margin: 4px 0 9px; color: #58636d; font-size: 13px; }
-.access-update div { display: flex; gap: 8px; }
-.access-update button { padding: 7px 10px; border: 1px solid #18202a; background: #fff; font-size: 12px; font-weight: 700; }
-.access-update button:hover:not(:disabled) { border-color: #e55c2e; color: #e55c2e; }
+.access-update p { margin: -7px 0 0; color: #58636d; font-size: 13px; }
+.access-update__choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.access-update__choices label { display: flex; min-height: 52px; align-items: start; gap: 8px; padding: 10px; border: 1px solid #c7d0d2; color: #49555f; background: #fff; font-size: 12px; font-weight: 700; line-height: 1.35; }
+.access-update__choices label:has(input:checked) { border-color: #18202a; color: #18202a; box-shadow: inset 3px 0 #e55c2e; }
+.access-update__choices input { flex: 0 0 auto; margin: 2px 0 0; accent-color: #18202a; }
+.access-update__note { display: grid; gap: 5px; color: #18202a; font-size: 12px; font-weight: 750; }
+.access-update__note span { color: #58636d; font-weight: 500; }
+.access-update__note textarea { width: 100%; resize: vertical; padding: 8px 10px; border: 1px solid #c7d0d2; color: #18202a; background: #fff; font-size: 13px; line-height: 1.4; }
+.access-update__note textarea:focus { border-color: #18202a; outline: 0; box-shadow: inset 3px 0 #e55c2e; }
+.access-update .secondary-button { justify-self: start; }
 .secondary-button { min-height: 42px; padding: 0 15px; border: 1px solid #18202a; background: transparent; font-size: 13px; font-weight: 740; }
 
 .brand {
@@ -364,6 +371,17 @@ h1 {
 .binding-fact { margin-top: 12px !important; color: #58636d; font-size: 13px !important; }
 .binding-fact code { color: #18202a; }
 
+.decision-trace { display: grid; grid-template-columns: minmax(170px, 0.45fr) minmax(0, 1fr); gap: 20px 32px; margin-top: 34px; padding: 20px 0; border-top: 1px solid #c7d0d2; border-bottom: 1px solid #c7d0d2; }
+.decision-trace h2 { margin: 0; font-size: 24px; }
+.decision-trace__intro { max-width: 560px; margin: 0; color: #58636d; font-size: 13px; line-height: 1.48; }
+.decision-trace dl { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px 28px; margin: 0; }
+.decision-trace dl > div { padding-left: 12px; border-left: 3px solid #c7d0d2; }
+.decision-trace dl > div:nth-child(2) { border-left-color: #b83a3a; }
+.decision-trace dl > div:nth-child(3) { border-left-color: #1f7a62; }
+.decision-trace dt { margin-bottom: 5px; color: #58636d; font-size: 11px; font-weight: 750; letter-spacing: .05em; text-transform: uppercase; }
+.decision-trace dd { margin: 0; color: #49555f; font-size: 13px; line-height: 1.45; }
+.decision-trace ul { display: grid; gap: 5px; margin: 0; padding-left: 16px; }
+
 .action-panel {
   display: flex;
   align-items: center;
@@ -379,6 +397,8 @@ h1 {
 .action-panel--complete { border-color: #c7d0d2; }
 .action-panel--hold { align-items: start; border-color: #7c3128; background: #fff8f5; }
 .action-panel--hold .access-update { padding-top: 14px; border-top-color: #d8aaa2; }
+.action-panel:has(.access-update) { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.action-panel:has(.access-update) .access-update { width: 100%; }
 
 .primary-button {
   flex: 0 0 auto;
@@ -548,8 +568,10 @@ h1 {
   .case-queue { display: grid; gap: 10px; }
   .case-queue__item { min-width: 210px; }
   .pal-run dl { grid-template-columns: 1fr; gap: 18px; }
-  .access-update div { display: grid; }
-  .access-update button { width: 100%; min-height: 40px; text-align: left; }
+  .access-update__choices { grid-template-columns: 1fr; }
+  .access-update .secondary-button { width: 100%; min-height: 40px; text-align: center; }
+  .decision-trace { grid-template-columns: 1fr; }
+  .decision-trace dl { grid-template-columns: 1fr; }
   .evidence-rail { display: block; }
   .operation-record { margin-top: 26px; }
   .app-footer { display: grid; margin-top: 39px; }

@@ -74,6 +74,12 @@ export interface CaseOperatorView {
     readonly status: 'complete' | 'current'
     readonly occurredAt?: string
   }[]
+  readonly decisionTrace: {
+    readonly facts: readonly string[]
+    readonly constraint: string
+    readonly recommendedAction: string
+    readonly rejectedAlternatives: readonly string[]
+  }
   readonly palRun?: {
     readonly outcome: 'prepare_recovery' | 'hold_for_confirmation' | 'escalate'
     readonly stopCode: 'proposal_validated' | 'human_confirmation_required' | 'safe_recovery_not_prepared'
@@ -154,6 +160,7 @@ export interface ReceiptResponse extends CaseResponse {
 export interface EvidenceUpdateResponse extends CaseResponse {
   readonly evidenceUpdate: {
     readonly accessStatus: 'confirmed_clear' | 'blocked' | 'unknown'
+    readonly note?: string
     readonly outcome: 'prepare_recovery' | 'hold_for_confirmation' | 'escalate'
     readonly result: 'ready_for_review' | 'blocked_by_field_evidence' | 'needs_fresh_confirmation'
   }
@@ -224,11 +231,11 @@ export const operatorApi = {
   prepare(caseId = GREENLEAF_CASE_ID): Promise<PrepareResponse> {
     return request<PrepareResponse>(`/v1/operator/cases/${encodeURIComponent(caseId)}/prepare`, { method: 'POST' })
   },
-  updateAccess(caseId: string, accessStatus: EvidenceUpdateResponse['evidenceUpdate']['accessStatus']): Promise<EvidenceUpdateResponse> {
+  updateAccess(caseId: string, observation: Readonly<{ accessStatus: EvidenceUpdateResponse['evidenceUpdate']['accessStatus']; note?: string }>): Promise<EvidenceUpdateResponse> {
     return request<EvidenceUpdateResponse>(`/v1/operator/cases/${encodeURIComponent(caseId)}/evidence`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ accessStatus }),
+      body: JSON.stringify(observation),
     })
   },
   approve(proposalId: string): Promise<ApprovalResponse> {

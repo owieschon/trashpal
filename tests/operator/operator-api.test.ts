@@ -232,10 +232,10 @@ describePostgres('local operator facade', () => {
     const blocked = await request(value.app, cookie, {
       method: 'POST',
       url: '/v1/operator/cases/case_riverbend-operator/evidence',
-      payload: { accessStatus: 'blocked' },
+      payload: { accessStatus: 'blocked', note: 'Gate is locked for the afternoon.' },
     })
     expect(blocked.response.statusCode).toBe(200)
-    expect(field(blocked.body, 'evidenceUpdate')).toMatchObject({ accessStatus: 'blocked', result: 'blocked_by_field_evidence' })
+    expect(field(blocked.body, 'evidenceUpdate')).toMatchObject({ accessStatus: 'blocked', note: 'Gate is locked for the afternoon.', result: 'blocked_by_field_evidence' })
     const blockedCase = field(blocked.body, 'case')
     expect(blockedCase.proposal).toBeUndefined()
     expect(field(blockedCase, 'nextAction')).toMatchObject({ kind: 'record_evidence', label: 'Resolve the access conflict' })
@@ -246,6 +246,12 @@ describePostgres('local operator facade', () => {
     expect(field(blockedCase, 'palRun').includedEvidence).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: expect.any(String), source: expect.any(String), freshness: expect.any(String), reason: expect.any(String) }),
     ]))
+    expect(field(blockedCase, 'decisionTrace')).toMatchObject({
+      constraint: expect.stringContaining('Fresh conflicting field evidence'),
+      recommendedAction: expect.stringContaining('Hold the case'),
+      rejectedAlternatives: expect.arrayContaining([expect.stringContaining('Dispatch')]),
+    })
+    expect(JSON.stringify(blockedCase.evidence)).toContain('Operator note is recorded for review; Pal did not evaluate it.')
 
     const unknown = await request(value.app, cookie, {
       method: 'POST',

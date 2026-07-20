@@ -19,6 +19,12 @@ const base: CaseOperatorView = {
   summary: { phase: 'source_records_available', whatHappened: 'A service exception needs review.', whatPalChecked: ['Pal checked the case.'], whatIsUnknown: ['Provider acceptance is not completion.'] },
   activity: [{ id: 'signal', label: 'Signal received', detail: 'The service exception entered the case record.', status: 'current' }],
   evidence: [],
+  decisionTrace: {
+    facts: ['A case fact.'],
+    constraint: 'A bounded constraint.',
+    recommendedAction: 'Review the case.',
+    rejectedAlternatives: ['Dispatch without approval.'],
+  },
   receiptAvailable: false,
   nextAction: { kind: 'prepare', label: 'Prepare recovery', requiresApproval: false },
 }
