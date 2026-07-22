@@ -219,4 +219,4 @@ The simulated connector accepts only the stored execution snapshot. Its assignme
 
 ## Corpus limits
 
-The seed corpus proves one program, eleven intentionally selected behavior and failure cases, and the associated contract boundaries. It does not measure real fleet performance, CRM data quality, customer behavior, model quality, latency, cost, or PostHog behavior.
+The seed corpus proves one program, eleven intentionally selected behavior and failure cases, and the associated contract boundaries. It does not measure real fleet performance, CRM data quality, customer behavior, model quality, latency, cost, or analytics delivery.

@@ -109,8 +109,12 @@ describe('black-box production harness enforcement', () => {
   })
 
   it('changes the same external world from prepare to fail-closed when the production call budget changes', async () => {
+    const clock = { nowMs: () => Date.parse(observedAt) }
     const completeCalls: string[] = []
-    const complete = await runBlackBox(input(6), { skillInvoker: recordedInvoker(completeCalls) })
+    const complete = await runBlackBox(input(6), {
+      skillInvoker: recordedInvoker(completeCalls),
+      clock,
+    })
 
     expect(complete.outcome).toBe('prepare_recovery')
     if (!('agentRunTrace' in complete)) throw new Error('production harness trace missing')
@@ -125,7 +129,10 @@ describe('black-box production harness enforcement', () => {
     ])
 
     const boundedCalls: string[] = []
-    const bounded = await runBlackBox(input(5), { skillInvoker: recordedInvoker(boundedCalls) })
+    const bounded = await runBlackBox(input(5), {
+      skillInvoker: recordedInvoker(boundedCalls),
+      clock,
+    })
 
     expect(bounded.outcome).toBe('escalate')
     if (!('agentRunTrace' in bounded)) throw new Error('production harness trace missing')

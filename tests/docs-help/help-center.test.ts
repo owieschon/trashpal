@@ -16,6 +16,7 @@ const pageNames = [
 const pageContents = Object.fromEntries(
   pageNames.map((pageName) => [pageName, readFileSync(resolve(helpDirectory, pageName), 'utf8')]),
 ) as Record<(typeof pageNames)[number], string>
+const repositoryReadme = readFileSync(new URL('../../README.md', import.meta.url), 'utf8')
 
 const pageJobs: Record<(typeof pageNames)[number], string> = {
   'index.md': '# Start here: resolve a missed collection safely',
@@ -98,5 +99,15 @@ describe('Help Center', () => {
     expect(developerReference).toContain('../architecture/DOMAIN_ASSUMPTIONS.md')
     expect(developerReference).toContain('../architecture/SYNTHETIC_SEED_CORPUS.md')
     expect(developerReference).not.toContain('../AGENT_PROFILE.md')
+  })
+
+  it('installs dependencies before either runnable repository path', () => {
+    const install = repositoryReadme.indexOf('pnpm install --frozen-lockfile')
+    const check = repositoryReadme.indexOf('pnpm check')
+    const demo = repositoryReadme.indexOf('pnpm demo:services')
+
+    expect(install).toBeGreaterThan(0)
+    expect(install).toBeLessThan(check)
+    expect(install).toBeLessThan(demo)
   })
 })
