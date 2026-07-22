@@ -53,7 +53,7 @@ Recorded 2026-07-17T03:52:31Z against the implementation archived with this rece
 
 - Live model behavior, recommendation quality, prompt-injection resilience against a live provider, latency, token use, cost, or corpus-scale evaluation.
 - Live Salesforce, routing, dispatch, OAuth, webhooks, customer data, or cross-system transaction behavior.
-- Production security operations, reliability, deployment, backups, observability, PostHog ingestion, or user-interface behavior.
+- Production security operations, reliability, deployment, backups, observability, analytics ingestion, or user-interface behavior.
 - Real fleet outcomes, service quality, customer confirmation rates, or business impact.
 
 The core contract and corpus boundaries remain canonical in [CORE_BUILD_CONTRACT.md](../../docs/architecture/CORE_BUILD_CONTRACT.md) and [SYNTHETIC_SEED_CORPUS.md](../../docs/architecture/SYNTHETIC_SEED_CORPUS.md).

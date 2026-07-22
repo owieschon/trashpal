@@ -173,7 +173,13 @@ function normalizeEvidence(input: {
   }
 }
 
-async function productionInvestigate(input: Input, skillInvoker: BlackBoxSkillInvoker) {
+type Clock = { nowMs(): number }
+
+async function productionInvestigate(
+  input: Input,
+  skillInvoker: BlackBoxSkillInvoker,
+  clock?: Clock,
+) {
   const internalTenantId = 'ten-oracle'
   const internalCaseId = `case-${createHash('sha256').update(input.trigger.caseId).digest('hex').slice(0, 12)}`
   const rawByInternalId = new Map<string, string>()
@@ -365,6 +371,7 @@ async function productionInvestigate(input: Input, skillInvoker: BlackBoxSkillIn
         return receipt
       },
     },
+    ...(clock ? { clock } : {}),
   })
   const result = await runBoundedPal({
     trigger: { tenantId: internalTenantId, caseId: internalCaseId, programId: input.trigger.programId },
@@ -374,6 +381,7 @@ async function productionInvestigate(input: Input, skillInvoker: BlackBoxSkillIn
     provider: createLocalProviderAdapter(new FixtureWorkflowReasoner(), { requestIdPrefix: 'fixture-provider' }),
     skillHost: host,
     runToken: input.skillTransport!.runToken,
+    ...(clock ? { clock } : {}),
   })
   return legacyProjection(input, result, rawByInternalId)
 }
@@ -459,13 +467,16 @@ function oneShot(input: Input) {
   }
 }
 
-export async function runBlackBox(inputValue: unknown, options: { skillInvoker?: BlackBoxSkillInvoker } = {}) {
+export async function runBlackBox(
+  inputValue: unknown,
+  options: { skillInvoker?: BlackBoxSkillInvoker; clock?: Clock } = {},
+) {
   const input = InputSchema.parse(inputValue)
   if (input.variant === 'deterministic_template') {
     return { schemaVersion: '1.0', outcome: 'hold_for_confirmation', claims: [], estimatedCostUsd: 0 }
   }
   if (input.variant === 'uncurated_one_shot_fixture' || input.variant === 'curated_one_shot_fixture') return oneShot(input)
-  return await productionInvestigate(input, options.skillInvoker ?? invoke)
+  return await productionInvestigate(input, options.skillInvoker ?? invoke, options.clock)
 }
 
 async function main() {
